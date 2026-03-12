@@ -189,16 +189,16 @@
 </head>
 <body>
 
-<div style="text-align:center;color:#999;font-size:12px;margin-bottom:8px;">v0.1-2603120017</div>
+<div style="text-align:center;color:#999;font-size:12px;margin-bottom:8px;">v0.1-2603120006</div>
 
 <!-- 识别区 -->
 <div class="card">
     <h2>📝 识别区（输入区）</h2>
     <div id="browserTip" class="browser-tip" style="margin-bottom:4px;"></div>
-    <div id="status" class="status info" style="margin-bottom:6px;">点击🎤按钮开始语音输入（iPad Safari不兼容），请手工输入血压数据</div>
+    <div id="status" class="status info" style="margin-bottom:6px;">点击🎤按钮开始语音输入，或手工输入</div>
     <div id="extractedPreview" class="extracted-preview" style="display:none;"></div>
     <div class="recognition-area">
-        <textarea id="resultText" class="recognition-input" placeholder="请手工输入血压数据，例如：高压120低压80心率60，或复制粘贴..." oninput="checkAndShowExtracted()"></textarea>
+        <textarea id="resultText" class="recognition-input" placeholder="可以手工输入血压数据，或点击右侧听写按钮语音输入..." oninput="checkAndShowExtracted()"></textarea>
         <div class="transfer-section" style="gap: 10px;">
             <button id="dictateBtn" class="btn btn-dictate">🎤</button>
             <button id="addBtn" class="btn btn-transfer" disabled>⬇</button>
@@ -273,47 +273,24 @@ if (!SpeechRecognition) {
         }
     }
     
-    // 尝试创建 SpeechRecognition
-    const SpeechRecognitionAPI = window.SpeechRecognition || window.webkitSpeechRecognition;
-    if (SpeechRecognitionAPI) {
-        recognition = new SpeechRecognitionAPI();
-        recognition.lang = 'zh-CN';
-        recognition.continuous = false;
-        recognition.interimResults = false;
-        recognition.maxAlternatives = 1;
-    }
-    
-    // iPad/iPhone 兼容：每次点击时重新创建 recognition
-    function createRecognition() {
-        const SpeechRecognitionAPI = window.SpeechRecognition || window.webkitSpeechRecognition;
-        if (!SpeechRecognitionAPI) return null;
-        const rec = new SpeechRecognitionAPI();
-        rec.lang = 'zh-CN';
-        rec.continuous = false;
-        rec.interimResults = false;
-        rec.maxAlternatives = 1;
-        
-        rec.onresult = recognition.onresult;
-        rec.onerror = recognition.onerror;
-        rec.onend = recognition.onend;
-        rec.onstart = recognition.onstart;
-        
-        return rec;
-    }
+    recognition = new SpeechRecognition();
+    recognition.lang = 'zh-CN';
+    recognition.continuous = true;
+    recognition.interimResults = true;
     
     dictateBtn.onclick = function() {
+        console.log('dictateBtn clicked, isListening:', isListening, 'recognition:', recognition);
         if (isListening) stopListening();
         else startListening();
     };
     
     recognition.onresult = function(event) {
-        console.log('onresult called, results:', event.results.length);
+        console.log('onresult called, results length:', event.results.length);
         let interim = '';
         let final = '';
         
         for (let i = event.resultIndex; i < event.results.length; i++) {
             const transcript = event.results[i][0].transcript;
-            console.log('result', i, 'isFinal:', event.results[i].isFinal, 'transcript:', transcript);
             if (event.results[i].isFinal) final += transcript;
             else interim += transcript;
         }
@@ -337,8 +314,6 @@ if (!SpeechRecognition) {
             msg = '未检测到语音';
         } else if (msg === 'network') {
             msg = '网络错误';
-        } else {
-            msg = event.error + ' - 尝试使用本地模型';
         }
         statusDiv.textContent = '⚠️ ' + msg;
         statusDiv.className = 'status error';
@@ -348,34 +323,18 @@ if (!SpeechRecognition) {
     };
     
     recognition.onend = function() {
-        // 自动重启识别
         if (isListening) {
             try { recognition.start(); } catch(e) {}
-        } else {
-            // 用户主动停止
-            // 检查 finalTranscript 是否有内容
-            if (finalTranscript) {
-                statusDiv.textContent = '✅ 听写结束，识别到: ' + finalTranscript;
-            }
-            dictateBtn.textContent = '🎤';
-            dictateBtn.className = 'btn btn-dictate';
-            addBtn.disabled = false;
         }
     };
 }
 
 function startListening() {
-    // 先停止之前的 recognition
-    try { if (recognition) recognition.stop(); } catch(e) {}
-    
     isListening = true;
     finalTranscript = '';
     resultText.value = '';
     extractedPreview.style.display = 'none';
     addBtn.disabled = true;
-    
-    // iPad兼容：每次点击时重新创建 recognition
-    recognition = createRecognition();
     
     dictateBtn.textContent = '⏹️';
     dictateBtn.className = 'btn btn-dictate listening';
@@ -384,6 +343,7 @@ function startListening() {
     
     try { 
         recognition.start(); 
+        console.log('recognition.start() called');
     } catch(e) {
         statusDiv.textContent = '⚠️ 无法启动听写: ' + e.message;
         statusDiv.className = 'status error';
