@@ -189,7 +189,7 @@
 </head>
 <body>
 
-<div style="text-align:center;color:#999;font-size:12px;margin-bottom:8px;">v0.1-2603120013</div>
+<div style="text-align:center;color:#999;font-size:12px;margin-bottom:8px;">v0.1-2603120014</div>
 
 <!-- 识别区 -->
 <div class="card">
@@ -307,11 +307,13 @@ if (!SpeechRecognition) {
     };
     
     recognition.onresult = function(event) {
+        console.log('onresult called, results:', event.results.length);
         let interim = '';
         let final = '';
         
         for (let i = event.resultIndex; i < event.results.length; i++) {
             const transcript = event.results[i][0].transcript;
+            console.log('result', i, 'isFinal:', event.results[i].isFinal, 'transcript:', transcript);
             if (event.results[i].isFinal) final += transcript;
             else interim += transcript;
         }
