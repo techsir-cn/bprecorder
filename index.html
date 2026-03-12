@@ -189,7 +189,7 @@
 </head>
 <body>
 
-<div style="text-align:center;color:#999;font-size:12px;margin-bottom:8px;">v0.1-2603120012</div>
+<div style="text-align:center;color:#999;font-size:12px;margin-bottom:8px;">v0.1-2603120013</div>
 
 <!-- 识别区 -->
 <div class="card">
@@ -327,6 +327,7 @@ if (!SpeechRecognition) {
     };
     
     recognition.onerror = function(event) {
+        console.log('onerror:', event.error);
         let msg = event.error;
         if (msg === 'not-allowed' || msg === 'permission-denied') {
             msg = '麦克风权限被拒绝，请允许浏览器使用麦克风';
@@ -334,6 +335,8 @@ if (!SpeechRecognition) {
             msg = '未检测到语音';
         } else if (msg === 'network') {
             msg = '网络错误';
+        } else {
+            msg = event.error + ' - 尝试使用本地模型';
         }
         statusDiv.textContent = '⚠️ ' + msg;
         statusDiv.className = 'status error';
