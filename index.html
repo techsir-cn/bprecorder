@@ -189,7 +189,7 @@
 </head>
 <body>
 
-<div style="text-align:center;color:#999;font-size:12px;margin-bottom:8px;">v0.1-2603120014</div>
+<div style="text-align:center;color:#999;font-size:12px;margin-bottom:8px;">v0.1-2603120015</div>
 
 <!-- 识别区 -->
 <div class="card">
@@ -278,8 +278,8 @@ if (!SpeechRecognition) {
     if (SpeechRecognitionAPI) {
         recognition = new SpeechRecognitionAPI();
         recognition.lang = 'zh-CN';
-        recognition.continuous = true;
-        recognition.interimResults = true;
+        recognition.continuous = false;
+        recognition.interimResults = false;
         recognition.maxAlternatives = 1;
     }
     
@@ -289,8 +289,8 @@ if (!SpeechRecognition) {
         if (!SpeechRecognitionAPI) return null;
         const rec = new SpeechRecognitionAPI();
         rec.lang = 'zh-CN';
-        rec.continuous = true;
-        rec.interimResults = true;
+        rec.continuous = false;
+        rec.interimResults = false;
         rec.maxAlternatives = 1;
         
         rec.onresult = recognition.onresult;
@@ -353,10 +353,12 @@ if (!SpeechRecognition) {
             try { recognition.start(); } catch(e) {}
         } else {
             // 用户主动停止
+            // 检查 finalTranscript 是否有内容
+            if (finalTranscript) {
+                statusDiv.textContent = '✅ 听写结束，识别到: ' + finalTranscript;
+            }
             dictateBtn.textContent = '🎤';
             dictateBtn.className = 'btn btn-dictate';
-            statusDiv.textContent = '✅ 听写结束';
-            statusDiv.className = 'status success';
             addBtn.disabled = false;
         }
     };
