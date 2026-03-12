@@ -189,7 +189,7 @@
 </head>
 <body>
 
-<div style="text-align:center;color:#999;font-size:12px;margin-bottom:8px;">v0.1-2603120015</div>
+<div style="text-align:center;color:#999;font-size:12px;margin-bottom:8px;">v0.1-2603120016</div>
 
 <!-- 识别区 -->
 <div class="card">
@@ -365,6 +365,9 @@ if (!SpeechRecognition) {
 }
 
 function startListening() {
+    // 先停止之前的 recognition
+    try { if (recognition) recognition.stop(); } catch(e) {}
+    
     isListening = true;
     finalTranscript = '';
     resultText.value = '';
