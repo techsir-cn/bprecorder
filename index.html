@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>血压记录</title>
+    <title>血压记录 v1.0</title>
     <style>
         * { box-sizing: border-box; margin: 0; padding: 0; }
         body {
@@ -405,7 +405,6 @@ function checkAndShowExtracted() {
     const nums = extractThreeNumbers(text);
     
     if (nums.high || nums.low || nums.pulse) {
-        addBtn.disabled = false;
         extractedPreview.style.display = 'block';
         
         const methodText = nums.method === 'position' ? '(按位置)' : '(按关键词)';
@@ -414,40 +413,32 @@ function checkAndShowExtracted() {
             高压${nums.high || '-'} / 低压${nums.low || '-'} / 心率${nums.pulse || '-'}
         `;
     } else {
-        addBtn.disabled = true;
         extractedPreview.style.display = 'none';
     }
 }
 
-// 识别区 → 待选区（简单版本，等ollama准备好）
+// 识别区 → 待选区
 addBtn.onclick = function() {
     const text = resultText.value;
     if (!text.trim()) return;
     
-    // 直接传到待选区（先用本地逻辑，ollama后续加上）
-    const nums = extractThreeNumbers(text);
+    // 直接传到待选区，让ollama处理
+    pendingData.unshift({
+        id: Date.now(),
+        high: null,
+        low: null,
+        pulse: null,
+        originalText: text
+    });
     
-    if (nums.high || nums.low || nums.pulse) {
-        pendingData.unshift({
-            id: Date.now(),
-            high: nums.high,
-            low: nums.low,
-            pulse: nums.pulse,
-            originalText: text
-        });
-        
-        renderPending();
-        
-        finalTranscript = '';
-        resultText.value = '';
-        extractedPreview.style.display = 'none';
-        addBtn.disabled = true;
-        statusDiv.textContent = '✅ 已加入待选区';
-        statusDiv.className = 'status success';
-    } else {
-        statusDiv.textContent = '⚠️ 未能识别血压数据';
-        statusDiv.className = 'status error';
-    }
+    renderPending();
+    
+    finalTranscript = '';
+    resultText.value = '';
+    extractedPreview.style.display = 'none';
+    addBtn.disabled = true;
+    statusDiv.textContent = '✅ 已加入待选区';
+    statusDiv.className = 'status success';
 };
 
 function renderPending() {
