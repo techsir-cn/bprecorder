@@ -1,0 +1,599 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>血压记录</title>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+            padding: 16px;
+            max-width: 600px;
+            margin: 0 auto;
+            background: #f0f2f5;
+            min-height: 100vh;
+        }
+        .card {
+            background: white;
+            border-radius: 12px;
+            padding: 16px;
+            margin-bottom: 12px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+        .card h2 {
+            font-size: 16px;
+            color: #333;
+            margin-bottom: 12px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .btn {
+            padding: 12px 20px;
+            font-size: 16px;
+            font-weight: 600;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .btn:disabled { 
+            background: #ccc; 
+            cursor: not-allowed;
+            opacity: 0.6;
+        }
+        .btn-start { background: #27ae60; color: white; }
+        .btn-stop { background: #e74c3c; color: white; }
+        .btn-dictate {
+            background: #9b59b6;
+            color: white;
+            width: 60px;
+            height: 60px;
+            font-size: 24px;
+            padding: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-width: 60px;
+            min-height: 60px;
+        }
+        .btn-dictate:disabled {
+            background: #95a5a6;
+        }
+        .btn-dictate.listening {
+            background: #27ae60;
+            animation: pulse 1.5s infinite;
+        }
+        .btn-transfer { 
+            background: #3498db; 
+            color: white;
+            width: 60px;
+            height: 60px;
+            font-size: 24px;
+            padding: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .btn-transfer:disabled {
+            background: #95a5a6;
+        }
+        .btn-warning { background: #f39c12; color: white; }
+        .btn-danger { background: #95a5a6; color: white; }
+        .btn-small { padding: 6px 12px; font-size: 14px; }
+        
+        .btn-start.listening {
+            background: #e74c3c;
+            animation: pulse 1.5s infinite;
+        }
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.7; }
+        }
+        
+        /* 识别区布局 */
+        .recognition-area {
+            display: flex;
+            gap: 12px;
+            align-items: stretch;
+        }
+        .recognition-input {
+            flex: 1;
+            min-height: 120px;
+            padding: 12px;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            font-size: 16px;
+            resize: vertical;
+            font-family: inherit;
+            background: #fafafa;
+        }
+        .transfer-section {
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            gap: 8px;
+        }
+        
+        .status {
+            padding: 8px 12px;
+            border-radius: 6px;
+            font-size: 14px;
+            margin-top: 8px;
+        }
+        .status.success { background: #d4edda; color: #155724; }
+        .status.error { background: #f8d7da; color: #721c24; }
+        .status.info { background: #cce5ff; color: #004085; }
+        
+        .extracted-preview {
+            margin-top: 8px;
+            padding: 8px 12px;
+            background: #e3f2fd;
+            border-radius: 6px;
+            font-size: 14px;
+            color: #1565c0;
+        }
+        
+        .pending-item {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 12px;
+            background: #f8f9fa;
+            border-radius: 8px;
+            margin-bottom: 8px;
+            border-left: 4px solid #3498db;
+        }
+        .pending-item .numbers {
+            font-size: 22px;
+            font-weight: bold;
+            font-family: monospace;
+            color: #27ae60;
+        }
+        .pending-item .actions {
+            display: flex;
+            gap: 8px;
+        }
+        
+        .record-item {
+            padding: 12px;
+            background: #e8f5e9;
+            border-radius: 8px;
+            margin-bottom: 8px;
+            border-left: 4px solid #27ae60;
+            font-family: monospace;
+            font-size: 16px;
+            color: #333;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .empty-msg {
+            text-align: center;
+            color: #999;
+            padding: 20px;
+        }
+        
+        .browser-tip {
+            margin-top: 8px;
+            padding: 8px 12px;
+            border-radius: 6px;
+            font-size: 13px;
+        }
+        .browser-tip.success { background: #d4edda; color: #155724; }
+        .browser-tip.warning { background: #fff3cd; color: #856404; }
+        .browser-tip.error { background: #f8d7da; color: #721c24; }
+    </style>
+</head>
+<body>
+
+<!-- 识别区 -->
+<div class="card">
+    <h2>📝 识别区（输入区）</h2>
+    <div id="browserTip" class="browser-tip" style="margin-bottom:4px;"></div>
+    <div id="status" class="status info" style="margin-bottom:6px;">点击🎤按钮开始语音输入，或手工输入</div>
+    <div id="extractedPreview" class="extracted-preview" style="display:none;"></div>
+    <div class="recognition-area">
+        <textarea id="resultText" class="recognition-input" placeholder="可以手工输入血压数据，或点击右侧听写按钮语音输入..." oninput="checkAndShowExtracted()"></textarea>
+        <div class="transfer-section" style="gap: 10px;">
+            <button id="dictateBtn" class="btn btn-dictate">🎤</button>
+            <button id="addBtn" class="btn btn-transfer" disabled>⬇</button>
+        </div>
+    </div>
+</div>
+
+<!-- 待选区 -->
+<div class="card">
+    <h2>📋 待选区（数字提取结果）</h2>
+    <div id="pendingList">
+        <div class="empty-msg">暂无数据</div>
+    </div>
+    <div style="margin-top:12px;">
+        <button id="recordBtn" class="btn btn-primary" style="display:none; width:100%;">✅ 采纳</button>
+    </div>
+</div>
+
+<!-- 记录区 -->
+<div class="card">
+    <h2>📚 记录区（格式化结果）</h2>
+    <div id="recordList">
+        <div class="empty-msg">暂无记录</div>
+    </div>
+</div>
+
+<script>
+const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+const dictateBtn = document.getElementById('dictateBtn');
+const statusDiv = document.getElementById('status');
+const resultText = document.getElementById('resultText');
+const extractedPreview = document.getElementById('extractedPreview');
+const addBtn = document.getElementById('addBtn');
+const pendingList = document.getElementById('pendingList');
+const recordBtn = document.getElementById('recordBtn');
+const recordList = document.getElementById('recordList');
+
+let recognition = null;
+let isListening = false;
+let finalTranscript = '';
+let pendingData = [];
+let recordData = [];
+
+if (!SpeechRecognition) {
+    statusDiv.textContent = '❌ 当前浏览器不支持听写';
+    statusDiv.className = 'status error';
+    dictateBtn.disabled = true;
+} else if (location.protocol !== 'https:' && location.hostname !== 'localhost' && location.hostname !== '127.0.0.1') {
+    statusDiv.innerHTML = '⚠️ 需要<b>HTTPS</b>才能使用麦克风，请使用安全连接访问';
+    statusDiv.className = 'status error';
+    dictateBtn.disabled = true;
+} else {
+    // 检测浏览器类型
+    const ua = navigator.userAgent;
+    const isIOS = /iPad|iPhone|iPod/.test(ua);
+    const isMac = /Mac/.test(ua) && !isIOS;
+    const isWin = /Windows/.test(ua);
+    const isAndroid = /Android/.test(ua);
+    const isLinux = /Linux/.test(ua) && !isAndroid;
+    const isEdge = /Edg/.test(ua);
+    const isSafari = /Safari/.test(ua) && !/Chrome/.test(ua);
+    const isChrome = /Chrome/.test(ua) && !/Edg/.test(ua);
+    
+    if (isChrome) {
+        const browserTip = document.getElementById('browserTip');
+        if (isIOS || isMac) {
+            browserTip.innerHTML = '⚠️ 建议使用 <b>Edge</b> 或 <b>Safari</b> 浏览器';
+            browserTip.className = 'browser-tip warning';
+        } else {
+            browserTip.innerHTML = '⚠️ 建议使用 <b>Edge</b> 浏览器';
+            browserTip.className = 'browser-tip warning';
+        }
+    }
+    
+    recognition = new SpeechRecognition();
+    recognition.lang = 'zh-CN';
+    recognition.continuous = true;
+    recognition.interimResults = true;
+    
+    dictateBtn.onclick = function() {
+        if (isListening) stopListening();
+        else startListening();
+    };
+    
+    recognition.onresult = function(event) {
+        let interim = '';
+        let final = '';
+        
+        for (let i = event.resultIndex; i < event.results.length; i++) {
+            const transcript = event.results[i][0].transcript;
+            if (event.results[i].isFinal) final += transcript;
+            else interim += transcript;
+        }
+        
+        if (final) finalTranscript += final;
+        
+        // 显示识别内容（包含中间结果）
+        resultText.value = finalTranscript + (interim ? '\n' + interim : '');
+        resultText.scrollTop = resultText.scrollHeight;
+        
+        // 检查并显示提取预览
+        checkAndShowExtracted();
+    };
+    
+    recognition.onerror = function(event) {
+        let msg = event.error;
+        if (msg === 'not-allowed' || msg === 'permission-denied') {
+            msg = '麦克风权限被拒绝，请允许浏览器使用麦克风';
+        } else if (msg === 'no-speech') {
+            msg = '未检测到语音';
+        } else if (msg === 'network') {
+            msg = '网络错误';
+        }
+        statusDiv.textContent = '⚠️ ' + msg;
+        statusDiv.className = 'status error';
+        dictateBtn.textContent = '🎤';
+        dictateBtn.className = 'btn btn-dictate';
+        isListening = false;
+    };
+    
+    recognition.onend = function() {
+        if (isListening) {
+            try { recognition.start(); } catch(e) {}
+        }
+    };
+}
+
+function startListening() {
+    isListening = true;
+    finalTranscript = '';
+    resultText.value = '';
+    extractedPreview.style.display = 'none';
+    addBtn.disabled = true;
+    
+    dictateBtn.textContent = '⏹️';
+    dictateBtn.className = 'btn btn-dictate listening';
+    statusDiv.textContent = '🔴 正在听写...';
+    statusDiv.className = 'status info';
+    
+    try { 
+        recognition.start(); 
+    } catch(e) {
+        statusDiv.textContent = '⚠️ 无法启动听写: ' + e.message;
+        statusDiv.className = 'status error';
+        isListening = false;
+        dictateBtn.textContent = '🎤';
+    }
+}
+
+function stopListening() {
+    isListening = false;
+    dictateBtn.textContent = '🎤';
+    dictateBtn.className = 'btn btn-dictate';
+    statusDiv.textContent = '✅ 听写结束';
+    statusDiv.className = 'status success';
+    
+    try { recognition.stop(); } catch(e) {}
+}
+
+// 提取三个数字（按位置：第1个=高压，第2个=低压，第3个=心率）
+function extractThreeNumbers(text) {
+    // 先尝试按关键词提取
+    const highKeywords = ['高压', '收缩压'];
+    const lowKeywords = ['低压', '舒张压'];
+    const pulseKeywords = ['心率', '脉率', '脉搏', '心跳'];
+    
+    let high = null, low = null, pulse = null;
+    
+    // 按关键词查找
+    for (let kw of highKeywords) {
+        const match = text.match(new RegExp(kw + '[^\\d]*(\\d{2,3})'));
+        if (match) { high = parseInt(match[1]); break; }
+    }
+    
+    for (let kw of lowKeywords) {
+        const match = text.match(new RegExp(kw + '[^\\d]*(\\d{2,3})'));
+        if (match) { low = parseInt(match[1]); break; }
+    }
+    
+    for (let kw of pulseKeywords) {
+        const match = text.match(new RegExp(kw + '[^\\d]*(\\d{2,3})'));
+        if (match) { pulse = parseInt(match[1]); break; }
+    }
+    
+    // 如果有关键词，使用关键词结果
+    if (high || low || pulse) {
+        return { high, low, pulse, method: 'keyword' };
+    }
+    
+    // 没有关键词，按位置提取（第1个数字=高压，第2个=低压，第3个=心率）
+    const allNumbers = text.match(/\d{2,3}/g);
+    if (allNumbers && allNumbers.length >= 3) {
+        return {
+            high: parseInt(allNumbers[0]),
+            low: parseInt(allNumbers[1]),
+            pulse: parseInt(allNumbers[2]),
+            method: 'position'
+        };
+    }
+    
+    return { high, low, pulse, method: 'none' };
+}
+
+function checkAndShowExtracted() {
+    const text = resultText.value;
+    const nums = extractThreeNumbers(text);
+    
+    if (nums.high || nums.low || nums.pulse) {
+        addBtn.disabled = false;
+        extractedPreview.style.display = 'block';
+        
+        const methodText = nums.method === 'position' ? '(按位置)' : '(按关键词)';
+        extractedPreview.innerHTML = `
+            <strong>提取结果${methodText}:</strong> 
+            高压${nums.high || '-'} / 低压${nums.low || '-'} / 心率${nums.pulse || '-'}
+        `;
+    } else {
+        addBtn.disabled = true;
+        extractedPreview.style.display = 'none';
+    }
+}
+
+// 识别区 → 待选区（简单版本，等ollama准备好）
+addBtn.onclick = function() {
+    const text = resultText.value;
+    if (!text.trim()) return;
+    
+    // 直接传到待选区（先用本地逻辑，ollama后续加上）
+    const nums = extractThreeNumbers(text);
+    
+    if (nums.high || nums.low || nums.pulse) {
+        pendingData.unshift({
+            id: Date.now(),
+            high: nums.high,
+            low: nums.low,
+            pulse: nums.pulse,
+            originalText: text
+        });
+        
+        renderPending();
+        
+        finalTranscript = '';
+        resultText.value = '';
+        extractedPreview.style.display = 'none';
+        addBtn.disabled = true;
+        statusDiv.textContent = '✅ 已加入待选区';
+        statusDiv.className = 'status success';
+    } else {
+        statusDiv.textContent = '⚠️ 未能识别血压数据';
+        statusDiv.className = 'status error';
+    }
+};
+
+function renderPending() {
+    if (pendingData.length === 0) {
+        pendingList.innerHTML = '<div class="empty-msg">暂无数据</div>';
+        recordBtn.style.display = 'none';
+        return;
+    }
+    
+    pendingList.innerHTML = pendingData.map((item, index) => `
+        <div class="pending-item">
+            <div class="numbers">${item.high || '-'}/${item.low || '-'}/${item.pulse || '-'}</div>
+            <div class="actions">
+                <button class="btn btn-warning btn-small" onclick="editItem(${index})">修改</button>
+                <button class="btn btn-danger btn-small" onclick="deleteItem(${index})">删除</button>
+            </div>
+        </div>
+    `).join('');
+    
+    recordBtn.style.display = 'block';
+}
+
+function editItem(index) {
+    const item = pendingData[index];
+    const high = prompt('高压:', item.high || '');
+    if (high === null) return;
+    const low = prompt('低压:', item.low || '');
+    if (low === null) return;
+    const pulse = prompt('心率:', item.pulse || '');
+    if (pulse === null) return;
+    
+    pendingData[index] = {
+        ...item,
+        high: high ? parseInt(high) : null,
+        low: low ? parseInt(low) : null,
+        pulse: pulse ? parseInt(pulse) : null
+    };
+    renderPending();
+}
+
+function deleteItem(index) {
+    pendingData.splice(index, 1);
+    renderPending();
+}
+
+// 采纳（单条=格式化，多条=平均+格式化）
+recordBtn.onclick = function() {
+    if (pendingData.length === 0) return;
+    
+    const now = new Date();
+    const time = now.toLocaleTimeString('zh-CN', {hour12: false}).substring(0, 5);
+    
+    // 保存原始数据用于核对
+    const sources = pendingData.map(item => ({
+        high: item.high,
+        low: item.low,
+        pulse: item.pulse
+    }));
+    
+    let result;
+    
+    if (pendingData.length === 1) {
+        // 单条：格式化
+        const item = pendingData[0];
+        const diff = (item.high && item.low) ? item.high - item.low : null;
+        result = {
+            time: time,
+            high: item.high,
+            low: item.low,
+            diff: diff,
+            pulse: item.pulse,
+            count: 1,
+            sources: sources  // 保留原始数据
+        };
+    } else {
+        // 多条：计算平均
+        const validHigh = pendingData.filter(d => d.high).map(d => d.high);
+        const validLow = pendingData.filter(d => d.low).map(d => d.low);
+        const validPulse = pendingData.filter(d => d.pulse).map(d => d.pulse);
+        
+        const avgHigh = validHigh.length ? Math.round(validHigh.reduce((a,b) => a+b, 0) / validHigh.length) : null;
+        const avgLow = validLow.length ? Math.round(validLow.reduce((a,b) => a+b, 0) / validLow.length) : null;
+        const avgPulse = validPulse.length ? Math.round(validPulse.reduce((a,b) => a+b, 0) / validPulse.length) : null;
+        const diff = (avgHigh && avgLow) ? avgHigh - avgLow : null;
+        
+        result = {
+            time: time,
+            high: avgHigh,
+            low: avgLow,
+            diff: diff,
+            pulse: avgPulse,
+            count: pendingData.length,
+            sources: sources  // 保留原始数据
+        };
+    }
+    
+    recordData.unshift(result);
+    renderRecords();
+    
+    // 待选区显示"已采纳"状态，不立即清空
+    pendingList.innerHTML = '<div class="status success" style="padding:20px;text-align:center;">✅ 已采纳到记录区</div>';
+    recordBtn.style.display = 'none';
+    
+    // 延迟清空待选区
+    setTimeout(() => {
+        pendingData = [];
+        renderPending();
+    }, 3000);
+    
+    statusDiv.textContent = '✅ 已采纳并记录';
+    statusDiv.className = 'status success';
+};
+
+function renderRecords() {
+    if (recordData.length === 0) {
+        recordList.innerHTML = '<div class="empty-msg">暂无记录</div>';
+        return;
+    }
+    
+    recordList.innerHTML = recordData.map((item, index) => {
+        const text = `${item.time}---${item.high}/${item.low}(${item.diff})-${item.pulse}🩺`;
+        const sources = item.sources ? `（来源：${item.sources.map(s => `${s.high}/${s.low}/${s.pulse}`).join('、')}）` : '';
+        return `<div class="record-item">
+            <div>
+                <span>${text}</span>
+                <small style="color:#666;font-size:12px;display:block;margin-top:4px;">${sources}</small>
+            </div>
+            <button class="btn btn-small btn-warning" onclick="copyRecord('${text}', ${index})">复制</button>
+        </div>`;
+    }).join('');
+}
+
+function copyRecord(text, index) {
+    navigator.clipboard.writeText(text).then(() => {
+        const btn = document.querySelectorAll('.record-item .btn')[index];
+        const originalText = btn.textContent;
+        btn.textContent = '✓';
+        setTimeout(() => {
+            btn.textContent = originalText;
+        }, 1500);
+    });
+}
+
+// 初始化
+renderPending();
+renderRecords();
+</script>
+</body>
+</html>
