@@ -83,6 +83,25 @@
         .btn-danger { background: #95a5a6; color: white; }
         .btn-small { padding: 6px 12px; font-size: 14px; }
         
+        .editable-num {
+            cursor: pointer;
+            padding: 2px 4px;
+            border-radius: 4px;
+        }
+        .editable-num.wheel-mode {
+            background: #fff3cd;
+        }
+        .editable-num.input-mode {
+            background: #f8f9fa;
+        }
+        .editable-num.input-mode input {
+            width: 50px;
+            font-size: 16px;
+            text-align: center;
+            border: none;
+            outline: none;
+        }
+        
         .btn-start.listening {
             background: #e74c3c;
             animation: pulse 1.5s infinite;
@@ -143,7 +162,6 @@
             background: #f8f9fa;
             border-radius: 8px;
             margin-bottom: 8px;
-            border-left: 4px solid #3498db;
         }
         .pending-item .numbers {
             font-size: 22px;
@@ -189,7 +207,7 @@
 </head>
 <body>
 
-<div style="text-align:center;color:#999;font-size:12px;margin-bottom:8px;">v0.1-2603120022</div>
+<div style="text-align:center;color:#999;font-size:12px;margin-bottom:8px;">v0.1-2603120031</div>
 
 <!-- 识别区 -->
 <div class="card">
@@ -200,8 +218,8 @@
     <div class="recognition-area">
         <textarea id="resultText" class="recognition-input" placeholder="可以手工输入血压数据，或点击右侧听写按钮语音输入..." oninput="checkAndShowExtracted()"></textarea>
         <div class="transfer-section" style="gap: 10px;">
-            <button id="dictateBtn" class="btn btn-dictate">🎤</button>
-            <button id="addBtn" class="btn btn-transfer" disabled>⬇</button>
+            <button id="dictateBtn" class="btn btn-dictate">听写</button>
+            <button id="addBtn" class="btn btn-transfer" disabled>提取</button>
         </div>
     </div>
 </div>
@@ -284,6 +302,7 @@ if (!SpeechRecognition) {
     };
     
     recognition.onresult = function(event) {
+        console.log('onresult called, results:', event.results.length);
         let interim = '';
         let final = '';
         
@@ -347,7 +366,7 @@ function startListening() {
     extractedPreview.style.display = 'none';
     addBtn.disabled = true;
     
-    dictateBtn.textContent = '⏹️';
+    dictateBtn.textContent = '停止';
     dictateBtn.className = 'btn btn-dictate listening';
     statusDiv.textContent = '🔴 正在听写...';
     statusDiv.className = 'status info';
@@ -358,13 +377,13 @@ function startListening() {
         statusDiv.textContent = '⚠️ 无法启动听写: ' + e.message;
         statusDiv.className = 'status error';
         isListening = false;
-        dictateBtn.textContent = '🎤';
+        dictateBtn.textContent = '听写';
     }
 }
 
 function stopListening() {
     isListening = false;
-    dictateBtn.textContent = '🎤';
+    dictateBtn.textContent = '听写';
     dictateBtn.className = 'btn btn-dictate';
     statusDiv.textContent = '✅ 听写结束';
     statusDiv.className = 'status success';
@@ -471,9 +490,10 @@ function renderPending() {
     
     pendingList.innerHTML = pendingData.map((item, index) => `
         <div class="pending-item">
-            <div class="numbers">${item.high || '-'}/${item.low || '-'}/${item.pulse || '-'}</div>
+            <div class="numbers">
+                <span class="editable-num" onclick="editNum(${index}, 'high')">${item.high || '-'}</span>/<span class="editable-num" onclick="editNum(${index}, 'low')">${item.low || '-'}</span>/<span class="editable-num" onclick="editNum(${index}, 'pulse')">${item.pulse || '-'}</span>
+            </div>
             <div class="actions">
-                <button class="btn btn-warning btn-small" onclick="editItem(${index})">修改</button>
                 <button class="btn btn-danger btn-small" onclick="deleteItem(${index})">删除</button>
             </div>
         </div>
@@ -482,23 +502,133 @@ function renderPending() {
     recordBtn.style.display = 'block';
 }
 
-function editItem(index) {
-    const item = pendingData[index];
-    const high = prompt('高压:', item.high || '');
-    if (high === null) return;
-    const low = prompt('低压:', item.low || '');
-    if (low === null) return;
-    const pulse = prompt('心率:', item.pulse || '');
-    if (pulse === null) return;
-    
-    pendingData[index] = {
-        ...item,
-        high: high ? parseInt(high) : null,
-        low: low ? parseInt(low) : null,
-        pulse: pulse ? parseInt(pulse) : null
-    };
-    renderPending();
+let editState = {}; // 记录每个数字的编辑状态 { 'index-field': 'wheel'|'input' }
+let currentEditKey = null; // 当前正在编辑的key
+let currentIndex = null;
+let currentField = null;
+let touchStartY = 0;
+
+function clearEdit() {
+    if (currentEditKey) {
+        document.removeEventListener('wheel', handleWheel);
+        document.removeEventListener('touchmove', handleTouch);
+        document.removeEventListener('touchstart', handleTouchStart);
+    }
+    editState = {};
+    currentEditKey = null;
+    currentIndex = null;
+    currentField = null;
 }
+
+function editNum(index, field) {
+    const key = index + '-' + field;
+    const span = event.target;
+    const item = pendingData[index];
+    
+    // 如果点击的是同一个数字，进入下一状态
+    if (currentEditKey === key) {
+        // 如果在输入态，保存并退出
+        if (editState[key] === 'input') {
+            const input = span.querySelector('input');
+            if (input) {
+                const val = parseInt(input.value) || null;
+                pendingData[index][field] = val;
+            }
+            clearEdit();
+            renderPending();
+            return;
+        }
+        
+        // 如果在滚轮态，进入输入态
+        if (editState[key] === 'wheel') {
+            editState[key] = 'input';
+            const currentValue = item[field] || '';
+            span.className = 'editable-num input-mode';
+            span.innerHTML = '';
+            const input = document.createElement('input');
+            input.type = 'number';
+            input.value = currentValue;
+            span.appendChild(input);
+            input.focus();
+            input.select();
+            
+            input.onblur = function() {
+                const val = parseInt(input.value) || null;
+                pendingData[index][field] = val;
+                clearEdit();
+                renderPending();
+            };
+            
+            input.onkeydown = function(e) {
+                if (e.key === 'Enter') {
+                    input.blur();
+                }
+            };
+            return;
+        }
+    }
+    
+    // 点击的是不同数字，先清除之前的编辑状态
+    clearEdit();
+    renderPending();
+    
+    // 重新获取span（因为刚渲染过）
+    const spans = document.querySelectorAll('.editable-num');
+    let newSpan = null;
+    spans.forEach(s => {
+        const onclick = s.getAttribute('onclick');
+        if (onclick && onclick.includes(`editNum(${index}`) && onclick.includes(`'${field}'`)) {
+            newSpan = s;
+        }
+    });
+    if (!newSpan) return;
+    
+    // 进入滚轮态
+    editState[key] = 'wheel';
+    currentEditKey = key;
+    currentIndex = index;
+    currentField = field;
+    newSpan.className = 'editable-num wheel-mode';
+    
+    // 全局滚轮调整
+    document.addEventListener('wheel', handleWheel = function(e) {
+        if (currentEditKey !== key) return;
+        e.preventDefault();
+        let val = pendingData[index][field] || 0;
+        if (e.deltaY < 0) val++;
+        else val--;
+        if (val < 0) val = 0;
+        if (val > 300) val = 300;
+        pendingData[index][field] = val;
+        newSpan.textContent = val;
+    }, { passive: false });
+    
+    // 全局触摸调整
+    document.addEventListener('touchstart', handleTouchStart = function(e) {
+        touchStartY = e.touches[0].clientY;
+    });
+    
+    document.addEventListener('touchmove', handleTouch = function(e) {
+        if (currentEditKey !== key) return;
+        e.preventDefault();
+        const touchY = e.touches[0].clientY;
+        const diff = touchStartY - touchY;
+        if (Math.abs(diff) > 10) {
+            let val = pendingData[index][field] || 0;
+            if (diff > 0) val++;
+            else val--;
+            if (val < 0) val = 0;
+            if (val > 300) val = 300;
+            pendingData[index][field] = val;
+            newSpan.textContent = val;
+            touchStartY = touchY;
+        }
+    }, { passive: false });
+}
+
+function handleWheel(e) {}
+function handleTouch(e) {}
+function handleTouchStart(e) {}
 
 function deleteItem(index) {
     pendingData.splice(index, 1);
