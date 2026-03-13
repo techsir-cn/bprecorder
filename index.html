@@ -207,7 +207,7 @@
 </head>
 <body>
 
-<div style="text-align:center;color:#999;font-size:12px;margin-bottom:8px;">v0.1-2603120031</div>
+<div style="text-align:center;color:#999;font-size:12px;margin-bottom:8px;">v0.1-2603130032</div>
 
 <!-- 识别区 -->
 <div class="card">
@@ -450,8 +450,10 @@ function checkAndShowExtracted() {
             <strong>提取结果${methodText}:</strong> 
             高压${nums.high || '-'} / 低压${nums.low || '-'} / 心率${nums.pulse || '-'}
         `;
+        addBtn.disabled = false;
     } else {
         extractedPreview.style.display = 'none';
+        addBtn.disabled = !text.trim();
     }
 }
 

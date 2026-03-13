@@ -1,0 +1,30 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+.venv/
+*.egg-info/
+dist/
+build/
+
+# 备份文件
+*.bak
+index.html.26*
+
+# 系统文件
+.DS_Store
+Thumbs.db
+
+# 开发文件
+test*.html
+*.log
+
+# 依赖
+requirements.txt
+
+# 录音文件
+recordings/
