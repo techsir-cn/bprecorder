@@ -213,7 +213,7 @@
 </head>
 <body>
 
-<div style="text-align:center;color:#999;font-size:12px;margin-bottom:8px;">v0.2-2603140043</div>
+<div style="text-align:center;color:#999;font-size:12px;margin-bottom:8px;">v0.2-2603140044</div>
 
 <!-- 识别区 -->
 <div class="card">
@@ -234,7 +234,7 @@
         <label style="display:block; margin:8px 0; color:#999;"><input type="radio" name="recognitionMethod" value="cloud" disabled> 云端听写(预留)</label>
         <label style="display:block; margin:8px 0; color:#999;"><input type="radio" name="recognitionMethod" value="bluetooth" disabled> 蓝牙识别(预留)</label>
         <label style="display:block; margin:8px 0; color:#999;"><input type="radio" name="recognitionMethod" value="camera" disabled> 拍照识别(预留)</label>
-        <button class="btn btn-primary" onclick="saveRecognitionConfig()" style="margin-top:8px; width:100%;">保存</button>
+        <button id="saveRecognitionBtn" class="btn btn-primary" style="margin-top:8px; width:100%;">保存</button>
     </div>
     <!-- 提取配置区 -->
     <div id="extractionConfig" style="display:none; margin-top:12px; padding:12px; background:#f5f5f5; border-radius:8px;">
@@ -251,7 +251,7 @@
             <input type="text" id="modelToken" style="width:100%; padding:8px; border:1px solid #ddd; border-radius:4px; margin-bottom:4px;" placeholder="Token(可选)">
             <textarea id="modelPrompt" style="width:100%; padding:8px; border:1px solid #ddd; border-radius:4px; min-height:60px;" placeholder="提示词"></textarea>
         </div>
-        <button class="btn btn-primary" onclick="saveExtractionConfig()" style="margin-top:8px; width:100%;">保存</button>
+        <button id="saveExtractionBtn" class="btn btn-primary" style="margin-top:8px; width:100%;">保存</button>
     </div>
 </div>
 
@@ -262,7 +262,7 @@
         <div class="empty-msg">暂无数据</div>
     </div>
     <div style="margin-top:12px;">
-        <button id="recordBtn" class="btn btn-primary" style="display:none; width:100%;">✅ 采纳</button>
+        <button id="recordBtn" class="btn btn-primary" style="display:none; width:100%; -webkit-user-select:none; user-select:none;">📊 计算平均</button>
     </div>
 </div>
 
@@ -276,8 +276,8 @@
     <div id="recordConfig" style="display:none; margin-top:12px; padding:12px; background:#f5f5f5; border-radius:8px;">
         <div style="font-weight:bold; margin-bottom:8px;">记录格式配置</div>
         <input type="text" id="recordFormat" value="HH:MM---high/low(diff)-pulse🩺" style="width:100%; padding:8px; border:1px solid #ddd; border-radius:4px;">
-        <div style="font-size:12px; color:#666; margin-top:4px;">可用变量: HH(时) MM(分) high(高压) low(低压) diff(压差) pulse(心率)</div>
-        <button class="btn btn-primary" onclick="saveRecordConfig()" style="margin-top:8px; width:100%;">保存</button>
+        <div style="font-size:12px; color: #666; margin-top:4px;">可用变量: HH(时) MM(分) high(高压) low(低压) diff(压差) pulse(心率)</div>
+        <button id="saveRecordBtn" class="btn btn-primary" style="margin-top:8px; width:100%;">保存</button>
     </div>
 </div>
 
@@ -374,60 +374,71 @@ function saveRecordConfig() {
     renderRecords();
 }
 
-// 长按检测
-let dictateBtnTimer = null;
-let addBtnTimer = null;
-let recordBtnTimer = null;
-let longPressTriggered = false;
+// 长按检测 - 使用统一的处理方式
+let longPressTimer = null;
+let longPressTarget = null;
+let ignoreNextClick = {};
+
+function setupLongPress(elementId, configDivId, initFunc) {
+    const el = document.getElementById(elementId);
+    if (!el) return;
+    
+    el.addEventListener('touchstart', function(e) {
+        longPressTarget = elementId;
+        ignoreNextClick[elementId] = false;
+        longPressTimer = setTimeout(() => {
+            ignoreNextClick[elementId] = true;
+            document.getElementById(configDivId).style.display = 'block';
+            if (initFunc) initFunc();
+        }, 800);
+    }, { passive: true });
+    
+    el.addEventListener('touchend', function(e) {
+        if (longPressTimer) {
+            clearTimeout(longPressTimer);
+            longPressTimer = null;
+        }
+    }, { passive: true });
+    
+    el.addEventListener('touchcancel', function(e) {
+        if (longPressTimer) {
+            clearTimeout(longPressTimer);
+            longPressTimer = null;
+        }
+    }, { passive: true });
+    
+    el.addEventListener('contextmenu', function(e) {
+        e.preventDefault();
+        document.getElementById(configDivId).style.display = 'block';
+        if (initFunc) initFunc();
+    });
+}
+
+// 统一处理保存按钮点击
+function setupSaveButton(btnId, saveFunc) {
+    const btn = document.getElementById(btnId);
+    if (!btn) return;
+    
+    btn.addEventListener('click', function(e) {
+        e.stopPropagation();
+        saveFunc();
+    });
+    
+    btn.addEventListener('touchend', function(e) {
+        e.stopPropagation();
+    });
+}
 
 document.addEventListener('DOMContentLoaded', function() {
-    // 识别按钮长按
-    dictateBtn.addEventListener('touchstart', function(e) {
-        longPressTriggered = false;
-        dictateBtnTimer = setTimeout(() => {
-            longPressTriggered = true;
-            document.getElementById('recognitionConfig').style.display = 'block';
-        }, 800);
-    });
-    dictateBtn.addEventListener('touchend', function() {
-        if (dictateBtnTimer) clearTimeout(dictateBtnTimer);
-    });
-    dictateBtn.addEventListener('contextmenu', function(e) {
-        e.preventDefault();
-        document.getElementById('recognitionConfig').style.display = 'block';
-    });
-    
-    // 提取按钮长按
-    addBtn.addEventListener('touchstart', function() {
-        addBtnTimer = setTimeout(() => {
-            document.getElementById('extractionConfig').style.display = 'block';
-            initExtractionConfig();
-        }, 800);
-    });
-    addBtn.addEventListener('touchend', function() {
-        if (addBtnTimer) clearTimeout(addBtnTimer);
-    });
-    addBtn.addEventListener('contextmenu', function(e) {
-        e.preventDefault();
-        document.getElementById('extractionConfig').style.display = 'block';
-        initExtractionConfig();
-    });
-    
-    // 采纳按钮长按（触发记录格式配置）
-    recordBtn.addEventListener('touchstart', function() {
-        recordBtnTimer = setTimeout(() => {
-            document.getElementById('recordConfig').style.display = 'block';
-            document.getElementById('recordFormat').value = config.record.format;
-        }, 800);
-    });
-    recordBtn.addEventListener('touchend', function() {
-        if (recordBtnTimer) clearTimeout(recordBtnTimer);
-    });
-    recordBtn.addEventListener('contextmenu', function(e) {
-        e.preventDefault();
-        document.getElementById('recordConfig').style.display = 'block';
+    setupLongPress('dictateBtn', 'recognitionConfig');
+    setupLongPress('addBtn', 'extractionConfig', initExtractionConfig);
+    setupLongPress('recordBtn', 'recordConfig', function() {
         document.getElementById('recordFormat').value = config.record.format;
     });
+    
+    setupSaveButton('saveRecognitionBtn', saveRecognitionConfig);
+    setupSaveButton('saveExtractionBtn', saveExtractionConfig);
+    setupSaveButton('saveRecordBtn', saveRecordConfig);
 });
 
 // 初始化
@@ -486,8 +497,8 @@ if (!SpeechRecognition) {
     recognition.interimResults = true;
     
     dictateBtn.onclick = function(e) {
-        if (longPressTriggered) {
-            longPressTriggered = false;
+        if (ignoreNextClick['dictateBtn']) {
+            ignoreNextClick['dictateBtn'] = false;
             return;
         }
         if (isListening) stopListening();
