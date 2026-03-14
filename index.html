@@ -13,12 +13,6 @@
             margin: 0 auto;
             background: #f0f2f5;
             min-height: 100vh;
-            -webkit-user-select: none;
-            user-select: none;
-        }
-        textarea, .record-item {
-            -webkit-user-select: text;
-            user-select: text;
         }
         .card {
             background: white;
@@ -219,26 +213,15 @@
 </head>
 <body>
 
-<div style="text-align:center;color:#999;font-size:12px;margin-bottom:8px;">v0.2-2603140040</div>
+<div style="text-align:center;color:#999;font-size:12px;margin-bottom:8px;">v0.2-2603140042</div>
 
 <!-- 识别区 -->
 <div class="card">
     <h2>📝 识别区（输入区）</h2>
     <div id="status" class="status info">支持直接输入和<span id="currentMethod">前端听写</span></div>
     <div id="extractedPreview" class="extracted-preview" style="display:none;"></div>
-    <div class="recognition-area" style="position:relative;">
-        <textarea id="resultText" class="recognition-input" placeholder="可以手工输入血压数据，或点击右侧识别按钮..." oninput="checkAndShowExtracted()" style="padding-bottom:50px;"></textarea>
-        <!-- 框选提取区（在输入框内底部） -->
-        <div id="dragSelectArea" style="position:absolute; bottom:4px; left:8px; right:68px; pointer-events:none;">
-            <div style="font-size:9px; color:#aaa; padding:2px 0; pointer-events:none;">纯数字按高压/低压/心率顺序提取，如错误请点击色块再点击数字</div>
-            <div style="display:flex; gap:6px; align-items:center; pointer-events:auto;">
-                <div class="drag-box" data-type="high" style="width:34px; height:24px; border:2px solid #9b59b6; border-radius:4px; display:flex; align-items:center; justify-content:center; font-size:11px; color:#9b59b6; cursor:pointer; background:white; white-space:nowrap;">高压</div>
-                <div class="drag-box" data-type="low" style="width:34px; height:24px; border:2px solid #3498db; border-radius:4px; display:flex; align-items:center; justify-content:center; font-size:11px; color:#3498db; cursor:pointer; background:white; white-space:nowrap;">低压</div>
-                <div class="drag-box" data-type="pulse" style="width:34px; height:24px; border:2px solid #27ae60; border-radius:4px; display:flex; align-items:center; justify-content:center; font-size:11px; color:#27ae60; cursor:pointer; background:white; white-space:nowrap;">心率</div>
-            </div>
-        </div>
-        <!-- 选中位置标记 -->
-        <div id="selectMarker" style="display:none; position:absolute; background:rgba(155,89,182,0.3); border:2px solid #9b59b6; border-radius:4px; pointer-events:none;"></div>
+    <div class="recognition-area">
+        <textarea id="resultText" class="recognition-input" placeholder="可以手工输入血压数据，或点击右侧识别按钮..." oninput="checkAndShowExtracted()"></textarea>
         <div class="transfer-section" style="gap: 10px;">
             <button id="dictateBtn" class="btn btn-dictate">识别</button>
             <button id="addBtn" class="btn btn-transfer" disabled>提取</button>
@@ -255,10 +238,19 @@
     </div>
     <!-- 提取配置区 -->
     <div id="extractionConfig" style="display:none; margin-top:12px; padding:12px; background:#f5f5f5; border-radius:8px;">
-        <div style="font-weight:bold; margin-bottom:8px;">正则关键词配置</div>
-        <input type="text" id="regexHigh" value="高压|收缩压" style="width:100%; padding:8px; border:1px solid #ddd; border-radius:4px; margin-bottom:4px;" placeholder="高压关键词">
-        <input type="text" id="regexLow" value="低压|舒张压" style="width:100%; padding:8px; border:1px solid #ddd; border-radius:4px; margin-bottom:4px;" placeholder="低压关键词">
-        <input type="text" id="regexPulse" value="心率|脉率|脉搏|心跳" style="width:100%; padding:8px; border:1px solid #ddd; border-radius:4px;" placeholder="心率关键词">
+        <div style="font-weight:bold; margin-bottom:8px;">提取方式配置</div>
+        <label style="display:block; margin:8px 0;"><input type="radio" name="extractionMethod" value="regex" checked onchange="toggleExtractionConfig()"> 正则</label>
+        <label style="display:block; margin:8px 0; color:#999;"><input type="radio" name="extractionMethod" value="model" disabled onchange="toggleExtractionConfig()"> 模型(预留)</label>
+        <div id="regexConfig" style="margin-top:8px;">
+            <input type="text" id="regexHigh" value="高压|收缩压" style="width:100%; padding:8px; border:1px solid #ddd; border-radius:4px; margin-bottom:4px;" placeholder="高压关键词">
+            <input type="text" id="regexLow" value="低压|舒张压" style="width:100%; padding:8px; border:1px solid #ddd; border-radius:4px; margin-bottom:4px;" placeholder="低压关键词">
+            <input type="text" id="regexPulse" value="心率|脉率|脉搏|心跳" style="width:100%; padding:8px; border:1px solid #ddd; border-radius:4px;" placeholder="心率关键词">
+        </div>
+        <div id="modelConfig" style="display:none; margin-top:8px;">
+            <input type="text" id="modelUrl" style="width:100%; padding:8px; border:1px solid #ddd; border-radius:4px; margin-bottom:4px;" placeholder="模型URL">
+            <input type="text" id="modelToken" style="width:100%; padding:8px; border:1px solid #ddd; border-radius:4px; margin-bottom:4px;" placeholder="Token(可选)">
+            <textarea id="modelPrompt" style="width:100%; padding:8px; border:1px solid #ddd; border-radius:4px; min-height:60px;" placeholder="提示词"></textarea>
+        </div>
         <button class="btn btn-primary" onclick="saveExtractionConfig()" style="margin-top:8px; width:100%;">保存</button>
     </div>
 </div>
@@ -334,21 +326,43 @@ function saveRecognitionConfig() {
     document.getElementById('recognitionConfig').style.display = 'none';
 }
 
+// 切换提取配置显示
+function toggleExtractionConfig() {
+    const method = document.querySelector('input[name="extractionMethod"]:checked').value;
+    document.getElementById('regexConfig').style.display = method === 'regex' ? 'block' : 'none';
+    document.getElementById('modelConfig').style.display = method === 'model' ? 'block' : 'none';
+}
+
 // 初始化提取配置
 function initExtractionConfig() {
     document.getElementById('regexHigh').value = config.extraction.regex.high.join('|');
     document.getElementById('regexLow').value = config.extraction.regex.low.join('|');
     document.getElementById('regexPulse').value = config.extraction.regex.pulse.join('|');
+    document.getElementById('modelUrl').value = config.extraction.model.url;
+    document.getElementById('modelToken').value = config.extraction.model.token;
+    document.getElementById('modelPrompt').value = config.extraction.model.prompt;
 }
 
 // 保存提取配置
 function saveExtractionConfig() {
+    const method = document.querySelector('input[name="extractionMethod"]:checked').value;
+    config.extraction.current = method;
+    localStorage.setItem('extractionCurrent', method);
+    
     config.extraction.regex.high = document.getElementById('regexHigh').value.split('|');
     config.extraction.regex.low = document.getElementById('regexLow').value.split('|');
     config.extraction.regex.pulse = document.getElementById('regexPulse').value.split('|');
     localStorage.setItem('regexHigh', JSON.stringify(config.extraction.regex.high));
     localStorage.setItem('regexLow', JSON.stringify(config.extraction.regex.low));
     localStorage.setItem('regexPulse', JSON.stringify(config.extraction.regex.pulse));
+    
+    config.extraction.model.url = document.getElementById('modelUrl').value;
+    config.extraction.model.token = document.getElementById('modelToken').value;
+    config.extraction.model.prompt = document.getElementById('modelPrompt').value;
+    localStorage.setItem('modelUrl', config.extraction.model.url);
+    localStorage.setItem('modelToken', config.extraction.model.token);
+    localStorage.setItem('modelPrompt', config.extraction.model.prompt);
+    
     document.getElementById('extractionConfig').style.display = 'none';
 }
 
@@ -415,171 +429,6 @@ document.addEventListener('DOMContentLoaded', function() {
 
 // 初始化
 updateCurrentMethod();
-
-// 框选提取变量
-const dragSelect = {
-    high: null,
-    low: null,
-    pulse: null
-};
-
-// 当前选中的框类型
-let activeDragBox = null;
-
-// 显示选中标记
-function showSelectMarker(x, y, width, height, color) {
-    const marker = document.getElementById('selectMarker');
-    marker.style.left = x + 'px';
-    marker.style.top = y + 'px';
-    marker.style.width = width + 'px';
-    marker.style.height = height + 'px';
-    marker.style.borderColor = color;
-    marker.style.background = color.replace(')', ',0.3)').replace('rgb', 'rgba');
-    marker.style.display = 'block';
-    
-    // 闪烁效果
-    marker.style.opacity = '1';
-    setTimeout(() => { marker.style.opacity = '0.5'; }, 100);
-    setTimeout(() => { marker.style.opacity = '1'; }, 200);
-    setTimeout(() => { marker.style.display = 'none'; }, 1000);
-}
-
-// 初始化点击选择框
-function initDragBoxes() {
-    const dragBoxes = document.querySelectorAll('.drag-box');
-    
-    // 点击框选中
-    dragBoxes.forEach(box => {
-        box.addEventListener('click', function(e) {
-            e.stopPropagation();
-            // 取消其他框的选中状态
-            dragBoxes.forEach(b => {
-                b.style.background = 'white';
-                b.style.transform = 'scale(1)';
-            });
-            // 选中当前框，放大高亮
-            this.style.background = '#fffde7';
-            this.style.transform = 'scale(1.1)';
-            this.style.boxShadow = '0 0 8px rgba(0,0,0,0.2)';
-            activeDragBox = this.dataset.type;
-        });
-    });
-    
-    // 框选模式下阻止输入框获得焦点
-    resultText.addEventListener('mousedown', function(e) {
-        if (activeDragBox) {
-            e.preventDefault();
-        }
-    });
-    
-    // 点击输入框放置框
-    resultText.addEventListener('click', function(e) {
-        if (!activeDragBox) return;
-        
-        e.preventDefault();
-        
-        const text = resultText.value;
-        const allNumbers = text.match(/\d{2,3}/g) || [];
-        
-        if (allNumbers.length === 0) {
-            // 没有数字，框选失败
-            resetActiveBox();
-            return;
-        }
-        
-        // 计算点击位置对应的数字
-        const rect = resultText.getBoundingClientRect();
-        const x = e.clientX - rect.left;
-        const y = e.clientY - rect.top;
-        const lineHeight = parseInt(getComputedStyle(resultText).lineHeight) || 20;
-        const line = Math.floor(y / lineHeight);
-        const charWidth = rect.width / resultText.cols;
-        const charIndex = Math.floor(x / charWidth) + line * resultText.cols;
-        
-        // 找到最接近的数字
-        let closestNum = null;
-        let closestNumIndex = -1;
-        let minDist = Infinity;
-        let searchIndex = 0;
-        for (let num of allNumbers) {
-            const numIndex = text.indexOf(num, searchIndex);
-            if (numIndex >= 0) {
-                const dist = Math.abs(numIndex - charIndex);
-                if (dist < minDist) {
-                    minDist = dist;
-                    closestNum = parseInt(num);
-                    closestNumIndex = numIndex;
-                }
-                searchIndex = numIndex + num.length;
-            }
-        }
-        
-        if (closestNum && minDist < 10) {
-            dragSelect[activeDragBox] = closestNum;
-            updateDragBoxDisplay(activeDragBox, closestNum);
-            updateExtractButton();
-            
-            // 显示选中标记
-            const colors = { high: '#9b59b6', low: '#3498db', pulse: '#27ae60' };
-            const numWidth = closestNum.toString().length * 12;
-            const markerX = 8 + closestNumIndex * 8;
-            const markerY = 8 + line * lineHeight;
-            showSelectMarker(markerX, markerY, numWidth, lineHeight - 4, colors[activeDragBox]);
-        }
-        
-        resetActiveBox();
-    });
-}
-
-// 重置选中状态
-function resetActiveBox() {
-    document.querySelectorAll('.drag-box').forEach(b => {
-        b.style.background = 'white';
-        b.style.transform = 'scale(1)';
-        b.style.boxShadow = 'none';
-    });
-    activeDragBox = null;
-}
-
-// 更新框显示
-function updateDragBoxDisplay(type, value) {
-    const box = document.querySelector(`.drag-box[data-type="${type}"]`);
-    if (box) {
-        box.textContent = value;
-        box.style.width = 'auto';
-        box.style.padding = '0 4px';
-        box.style.minWidth = '26px';
-    }
-}
-
-// 更新提取按钮状态
-function updateExtractButton() {
-    // 如果三个框都有值，可以提取
-    if (dragSelect.high && dragSelect.low && dragSelect.pulse) {
-        addBtn.disabled = false;
-    }
-}
-
-// 重置框选
-function resetDragSelect() {
-    dragSelect.high = null;
-    dragSelect.low = null;
-    dragSelect.pulse = null;
-    
-    document.querySelector('.drag-box[data-type="high"]').textContent = '高压';
-    document.querySelector('.drag-box[data-type="low"]').textContent = '低压';
-    document.querySelector('.drag-box[data-type="pulse"]').textContent = '心率';
-    
-    document.querySelector('.drag-box[data-type="high"]').style.width = '32px';
-    document.querySelector('.drag-box[data-type="low"]').style.width = '26px';
-    document.querySelector('.drag-box[data-type="pulse"]').style.width = '26px';
-    
-    document.querySelectorAll('.drag-box').forEach(b => b.style.background = 'white');
-    activeDragBox = null;
-}
-
-// 页面加载后初始化
-document.addEventListener('DOMContentLoaded', initDragBoxes);
 
 const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
 const dictateBtn = document.getElementById('dictateBtn');
@@ -799,19 +648,8 @@ addBtn.onclick = function() {
     const text = resultText.value;
     if (!text.trim()) return;
     
-    let nums;
-    // 框选优先：三个框都有值时使用框选结果
-    if (dragSelect.high && dragSelect.low && dragSelect.pulse) {
-        nums = {
-            high: dragSelect.high,
-            low: dragSelect.low,
-            pulse: dragSelect.pulse,
-            method: 'drag'
-        };
-    } else {
-        // 否则使用正则匹配
-        nums = extractThreeNumbers(text);
-    }
+    // 用本地逻辑提取数字
+    const nums = extractThreeNumbers(text);
     
     pendingData.unshift({
         id: Date.now(),
@@ -827,7 +665,6 @@ addBtn.onclick = function() {
     resultText.value = '';
     extractedPreview.style.display = 'none';
     addBtn.disabled = true;
-    resetDragSelect();
     statusDiv.textContent = '✅ 已加入待选区';
     statusDiv.className = 'status success';
 };
