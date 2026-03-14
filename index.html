@@ -213,7 +213,7 @@
 </head>
 <body>
 
-<div style="text-align:center;color:#999;font-size:12px;margin-bottom:8px;">v0.2-2603140042</div>
+<div style="text-align:center;color:#999;font-size:12px;margin-bottom:8px;">v0.2-2603140043</div>
 
 <!-- 识别区 -->
 <div class="card">
@@ -377,12 +377,15 @@ function saveRecordConfig() {
 // 长按检测
 let dictateBtnTimer = null;
 let addBtnTimer = null;
-let recordTitleTimer = null;
+let recordBtnTimer = null;
+let longPressTriggered = false;
 
 document.addEventListener('DOMContentLoaded', function() {
     // 识别按钮长按
-    dictateBtn.addEventListener('touchstart', function() {
+    dictateBtn.addEventListener('touchstart', function(e) {
+        longPressTriggered = false;
         dictateBtnTimer = setTimeout(() => {
+            longPressTriggered = true;
             document.getElementById('recognitionConfig').style.display = 'block';
         }, 800);
     });
@@ -410,17 +413,17 @@ document.addEventListener('DOMContentLoaded', function() {
         initExtractionConfig();
     });
     
-    // 记录区标题长按
-    document.getElementById('recordTitle').addEventListener('touchstart', function() {
-        recordTitleTimer = setTimeout(() => {
+    // 采纳按钮长按（触发记录格式配置）
+    recordBtn.addEventListener('touchstart', function() {
+        recordBtnTimer = setTimeout(() => {
             document.getElementById('recordConfig').style.display = 'block';
             document.getElementById('recordFormat').value = config.record.format;
         }, 800);
     });
-    document.getElementById('recordTitle').addEventListener('touchend', function() {
-        if (recordTitleTimer) clearTimeout(recordTitleTimer);
+    recordBtn.addEventListener('touchend', function() {
+        if (recordBtnTimer) clearTimeout(recordBtnTimer);
     });
-    document.getElementById('recordTitle').addEventListener('contextmenu', function(e) {
+    recordBtn.addEventListener('contextmenu', function(e) {
         e.preventDefault();
         document.getElementById('recordConfig').style.display = 'block';
         document.getElementById('recordFormat').value = config.record.format;
@@ -482,7 +485,11 @@ if (!SpeechRecognition) {
     recognition.continuous = true;
     recognition.interimResults = true;
     
-    dictateBtn.onclick = function() {
+    dictateBtn.onclick = function(e) {
+        if (longPressTriggered) {
+            longPressTriggered = false;
+            return;
+        }
         if (isListening) stopListening();
         else startListening();
     };
