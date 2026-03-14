@@ -213,7 +213,7 @@
 </head>
 <body>
 
-<div style="text-align:center;color:#999;font-size:12px;margin-bottom:8px;">v0.2-2603140045</div>
+<div style="text-align:center;color:#999;font-size:12px;margin-bottom:8px;">v0.2-2603140046</div>
 
 <!-- 识别区 -->
 <div class="card">
@@ -221,7 +221,7 @@
     <div id="status" class="status info">支持直接输入和<span id="currentMethod">前端听写</span></div>
     <div id="extractedPreview" class="extracted-preview" style="display:none;"></div>
     <div class="recognition-area">
-        <textarea id="resultText" class="recognition-input" placeholder="可以手工按顺序输入高压/低压/心率数字，输入时要用空格或符号隔开不能连起来&#10;也可以点击识别按钮进入识别方式&#10;长按识别可以配置识别方式" oninput="checkAndShowExtracted()"></textarea>
+        <textarea id="resultText" class="recognition-input" placeholder="可以手工按顺序输入高压/低压/心率数字，输入时要用空格或符号隔开不能连起来&#10;也可以点击识别按钮，长按识别可以配置识别方式" oninput="checkAndShowExtracted()"></textarea>
         <div class="transfer-section" style="gap: 10px;">
             <button id="dictateBtn" class="btn btn-dictate">识别</button>
             <button id="addBtn" class="btn btn-transfer" disabled>提取</button>
@@ -262,7 +262,7 @@
         <div class="empty-msg">暂无数据</div>
     </div>
     <div style="margin-top:12px;">
-        <button id="recordBtn" class="btn btn-primary" style="display:none; width:100%; -webkit-user-select:none; user-select:none;">📊 计算平均</button>
+        <button id="recordBtn" class="btn btn-primary" style="width:100%; -webkit-user-select:none; user-select:none;">计算平均 生成记录</button>
     </div>
 </div>
 
@@ -419,14 +419,13 @@ function setupSaveButton(btnId, saveFunc) {
     const btn = document.getElementById(btnId);
     if (!btn) return;
     
-    btn.addEventListener('click', function(e) {
+    // 直接设置onclick，确保事件处理器优先级最高
+    btn.onclick = function(e) {
         e.stopPropagation();
+        e.preventDefault();
         saveFunc();
-    });
-    
-    btn.addEventListener('touchend', function(e) {
-        e.stopPropagation();
-    });
+        return false;
+    };
 }
 
 document.addEventListener('DOMContentLoaded', function() {
@@ -690,7 +689,6 @@ addBtn.onclick = function() {
 function renderPending() {
     if (pendingData.length === 0) {
         pendingList.innerHTML = '<div class="empty-msg">暂无数据</div>';
-        recordBtn.style.display = 'none';
         return;
     }
     
@@ -704,8 +702,6 @@ function renderPending() {
             </div>
         </div>
     `).join('');
-    
-    recordBtn.style.display = 'block';
 }
 
 let editState = {}; // 记录每个数字的编辑状态 { 'index-field': 'wheel'|'input' }
@@ -897,7 +893,6 @@ recordBtn.onclick = function() {
     
     // 待选区显示"已采纳"状态，不立即清空
     pendingList.innerHTML = '<div class="status success" style="padding:20px;text-align:center;">✅ 已采纳到记录区</div>';
-    recordBtn.style.display = 'none';
     
     // 延迟清空待选区
     setTimeout(() => {
