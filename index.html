@@ -213,7 +213,7 @@
 </head>
 <body>
 
-<div style="text-align:center;color:#999;font-size:12px;margin-bottom:8px;">v0.2-2603140049</div>
+<div style="text-align:center;color:#999;font-size:12px;margin-bottom:8px;">v0.2-2603140050</div>
 
 <!-- 原始记录 -->
 <div class="card">
@@ -229,29 +229,29 @@
     </div>
     <!-- 识别配置区 -->
     <div id="recognitionConfig" style="display:none; margin-top:12px; padding:12px; background:#f5f5f5; border-radius:8px;">
-        <div style="font-weight:bold; margin-bottom:8px;">识别方式配置</div>
-        <label style="display:block; margin:8px 0;"><input type="radio" name="recognitionMethod" value="browser" checked> 前端听写</label>
+        <div style="font-weight:bold; margin-bottom:8px;">识别方式配置 <span style="font-weight:normal;color:#999;font-size:12px;">（选择后自动保存）</span></div>
+        <label style="display:block; margin:8px 0;"><input type="radio" name="recognitionMethod" value="browser" checked onchange="saveRecognitionConfig(); document.getElementById('recognitionConfig').style.display='none'"> 前端听写</label>
         <label style="display:block; margin:8px 0; color:#999;"><input type="radio" name="recognitionMethod" value="cloud" disabled> 云端听写(预留)</label>
         <label style="display:block; margin:8px 0; color:#999;"><input type="radio" name="recognitionMethod" value="bluetooth" disabled> 蓝牙识别(预留)</label>
         <label style="display:block; margin:8px 0; color:#999;"><input type="radio" name="recognitionMethod" value="camera" disabled> 拍照识别(预留)</label>
-        <button id="saveRecognitionBtn" class="btn btn-primary" style="margin-top:8px; width:100%;">保存</button>
+        <button class="btn btn-small" style="margin-top:8px; width:100%; background:#ccc;" onclick="document.getElementById('recognitionConfig').style.display='none'">关闭</button>
     </div>
     <!-- 提取配置区 -->
     <div id="extractionConfig" style="display:none; margin-top:12px; padding:12px; background:#f5f5f5; border-radius:8px;">
-        <div style="font-weight:bold; margin-bottom:8px;">提取方式配置</div>
+        <div style="font-weight:bold; margin-bottom:8px;">提取方式配置 <span style="font-weight:normal;color:#999;font-size:12px;">（失焦自动保存）</span></div>
         <label style="display:block; margin:8px 0;"><input type="radio" name="extractionMethod" value="regex" checked onchange="toggleExtractionConfig()"> 正则</label>
         <label style="display:block; margin:8px 0; color:#999;"><input type="radio" name="extractionMethod" value="model" disabled onchange="toggleExtractionConfig()"> 模型(预留)</label>
         <div id="regexConfig" style="margin-top:8px;">
-            <input type="text" id="regexHigh" value="高压|收缩压" style="width:100%; padding:8px; border:1px solid #ddd; border-radius:4px; margin-bottom:4px;" placeholder="高压关键词">
-            <input type="text" id="regexLow" value="低压|舒张压" style="width:100%; padding:8px; border:1px solid #ddd; border-radius:4px; margin-bottom:4px;" placeholder="低压关键词">
-            <input type="text" id="regexPulse" value="心率|脉率|脉搏|心跳" style="width:100%; padding:8px; border:1px solid #ddd; border-radius:4px;" placeholder="心率关键词">
+            <input type="text" id="regexHigh" value="高压|收缩压" style="width:100%; padding:8px; border:1px solid #ddd; border-radius:4px; margin-bottom:4px;" placeholder="高压关键词" onblur="saveExtractionConfig()">
+            <input type="text" id="regexLow" value="低压|舒张压" style="width:100%; padding:8px; border:1px solid #ddd; border-radius:4px; margin-bottom:4px;" placeholder="低压关键词" onblur="saveExtractionConfig()">
+            <input type="text" id="regexPulse" value="心率|脉率|脉搏|心跳" style="width:100%; padding:8px; border:1px solid #ddd; border-radius:4px;" placeholder="心率关键词" onblur="saveExtractionConfig()">
         </div>
         <div id="modelConfig" style="display:none; margin-top:8px;">
-            <input type="text" id="modelUrl" style="width:100%; padding:8px; border:1px solid #ddd; border-radius:4px; margin-bottom:4px;" placeholder="模型URL">
-            <input type="text" id="modelToken" style="width:100%; padding:8px; border:1px solid #ddd; border-radius:4px; margin-bottom:4px;" placeholder="Token(可选)">
-            <textarea id="modelPrompt" style="width:100%; padding:8px; border:1px solid #ddd; border-radius:4px; min-height:60px;" placeholder="提示词"></textarea>
+            <input type="text" id="modelUrl" style="width:100%; padding:8px; border:1px solid #ddd; border-radius:4px; margin-bottom:4px;" placeholder="模型URL" onblur="saveExtractionConfig()">
+            <input type="text" id="modelToken" style="width:100%; padding:8px; border:1px solid #ddd; border-radius:4px; margin-bottom:4px;" placeholder="Token(可选)" onblur="saveExtractionConfig()">
+            <textarea id="modelPrompt" style="width:100%; padding:8px; border:1px solid #ddd; border-radius:4px; min-height:60px;" placeholder="提示词" onblur="saveExtractionConfig()"></textarea>
         </div>
-        <button id="saveExtractionBtn" class="btn btn-primary" style="margin-top:8px; width:100%;">保存</button>
+        <button class="btn btn-small" style="margin-top:8px; width:100%; background:#ccc;" onclick="document.getElementById('extractionConfig').style.display='none'">关闭</button>
     </div>
 </div>
 
@@ -274,10 +274,10 @@
     </div>
     <!-- 记录格式配置区 -->
     <div id="recordConfig" style="display:none; margin-top:12px; padding:12px; background:#f5f5f5; border-radius:8px;">
-        <div style="font-weight:bold; margin-bottom:8px;">记录格式配置</div>
-        <input type="text" id="recordFormat" value="HH:MM---high/low(diff)-pulse🩺" style="width:100%; padding:8px; border:1px solid #ddd; border-radius:4px;">
+        <div style="font-weight:bold; margin-bottom:8px;">记录格式配置 <span style="font-weight:normal;color:#999;font-size:12px;">（失焦自动保存）</span></div>
+        <input type="text" id="recordFormat" value="HH:MM---high/low(diff)-pulse🩺" style="width:100%; padding:8px; border:1px solid #ddd; border-radius:4px;" onblur="saveRecordConfig()">
         <div style="font-size:12px; color: #666; margin-top:4px;">可用变量: HH(时) MM(分) high(高压) low(低压) diff(压差) pulse(心率)</div>
-        <button id="saveRecordBtn" class="btn btn-primary" style="margin-top:8px; width:100%;">保存</button>
+        <button class="btn btn-small" style="margin-top:8px; width:100%; background:#ccc;" onclick="document.getElementById('recordConfig').style.display='none'">关闭</button>
     </div>
 </div>
 
@@ -410,39 +410,12 @@ function setupLongPress(elementId, configDivId, initFunc) {
     });
 }
 
-// 统一处理保存按钮点击
-function setupSaveButton(btnId, saveFunc, configDivId) {
-    const btn = document.getElementById(btnId);
-    if (!btn) return;
-    
-    // click事件
-    btn.onclick = function(e) {
-        e.stopPropagation();
-        e.preventDefault();
-        saveFunc();
-        document.getElementById(configDivId).style.display = 'none';
-        return false;
-    };
-    
-    // touchend事件（移动端更可靠）
-    btn.addEventListener('touchend', function(e) {
-        e.stopPropagation();
-        e.preventDefault();
-        saveFunc();
-        document.getElementById(configDivId).style.display = 'none';
-    }, { passive: false });
-}
-
 document.addEventListener('DOMContentLoaded', function() {
     setupLongPress('dictateBtn', 'recognitionConfig');
     setupLongPress('addBtn', 'extractionConfig', initExtractionConfig);
     setupLongPress('recordBtn', 'recordConfig', function() {
         document.getElementById('recordFormat').value = config.record.format;
     });
-    
-    setupSaveButton('saveRecognitionBtn', saveRecognitionConfig, 'recognitionConfig');
-    setupSaveButton('saveExtractionBtn', saveExtractionConfig, 'extractionConfig');
-    setupSaveButton('saveRecordBtn', saveRecordConfig, 'recordConfig');
 });
 
 // 初始化
