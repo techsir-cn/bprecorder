@@ -213,7 +213,7 @@
 </head>
 <body>
 
-<div style="text-align:center;color:#999;font-size:12px;margin-bottom:8px;">v0.2-2603140050</div>
+<div style="text-align:center;color:#999;font-size:12px;margin-bottom:8px;">v0.2-2603140051</div>
 
 <!-- 原始记录 -->
 <div class="card">
@@ -379,6 +379,7 @@ function setupLongPress(elementId, configDivId, initFunc) {
     const el = document.getElementById(elementId);
     if (!el) return;
     
+    // 触摸事件（手机/平板）
     el.addEventListener('touchstart', function(e) {
         longPressTarget = elementId;
         ignoreNextClick[elementId] = false;
@@ -403,6 +404,32 @@ function setupLongPress(elementId, configDivId, initFunc) {
         }
     }, { passive: true });
     
+    // 鼠标事件（桌面浏览器/触摸板）
+    el.addEventListener('mousedown', function(e) {
+        longPressTarget = elementId;
+        ignoreNextClick[elementId] = false;
+        longPressTimer = setTimeout(() => {
+            ignoreNextClick[elementId] = true;
+            document.getElementById(configDivId).style.display = 'block';
+            if (initFunc) initFunc();
+        }, 800);
+    });
+    
+    el.addEventListener('mouseup', function(e) {
+        if (longPressTimer) {
+            clearTimeout(longPressTimer);
+            longPressTimer = null;
+        }
+    });
+    
+    el.addEventListener('mouseleave', function(e) {
+        if (longPressTimer) {
+            clearTimeout(longPressTimer);
+            longPressTimer = null;
+        }
+    });
+    
+    // 右键菜单（桌面备用）
     el.addEventListener('contextmenu', function(e) {
         e.preventDefault();
         document.getElementById(configDivId).style.display = 'block';

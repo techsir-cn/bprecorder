@@ -1,0 +1,417 @@
+#!/usr/bin/env python3
+"""
+BPRecorder Server - 血压记录后端服务
+支持HTTPS自签名证书，自动生成
+"""
+
+import argparse
+import json
+import os
+import re
+import ssl
+import subprocess
+import sys
+from datetime import datetime
+from http.server import HTTPServer, SimpleHTTPRequestHandler
+from pathlib import Path
+
+WORKSPACE = Path(__file__).parent.resolve()
+RECORDS_DIR = WORKSPACE / "records"
+RECORDINGS_DIR = WORKSPACE / "recordings"
+RECORDINGS_DIR.mkdir(exist_ok=True)
+
+rec_state = {"log": [], "pending": []}
+
+
+# ========== 血压数据处理模块 ==========
+
+def normalize_blood_pressure_terms(text):
+    """规范化血压相关的同义词"""
+    replacements = [
+        ("心律", "脉率"),
+        ("心跳", "脉率"),
+        ("心跳数", "脉率"),
+        ("频率", "脉率"),
+        ("次每分", "脉率"),
+        ("脉搏", "脉率"),
+        ("收缩压", "高压"),
+        ("舒张压", "低压"),
+        ("毫米汞柱", ""),
+        ("测量结束", ""),
+        ("根据世界卫生组织标准", ""),
+        ("谢谢使用", ""),
+        ("祝您健康", ""),
+    ]
+    processed_text = text
+    for old, new in replacements:
+        processed_text = processed_text.replace(old, new)
+    return processed_text
+
+
+def extract_bp_data(text):
+    """从识别文字中提取血压数据"""
+    normalized_text = normalize_blood_pressure_terms(text)
+    original_text = text
+
+    def extract_number_after(text_segments, keywords):
+        for segment in text_segments:
+            for kw in keywords:
+                if kw in segment:
+                    kw_pos = segment.find(kw)
+                    after_kw = segment[kw_pos + len(kw):].strip()
+                    numbers = re.findall(r"\d+", after_kw)
+                    for num_str in numbers:
+                        num_val = int(num_str)
+                        if kw in ["高压", "收缩压"] and 90 <= num_val <= 200:
+                            return num_val
+                        elif kw in ["低压", "舒张压"] and 50 <= num_val <= 130:
+                            return num_val
+                        elif kw in ["脉率", "心率", "脉搏"] and 40 <= num_val <= 200:
+                            return num_val
+        return None
+
+    separators = ["，", ",", "。", ".", "；", ";", "：", ":", "、", " ", "-", "_", "/", "|"]
+    text_parts = [normalized_text]
+    for sep in separators:
+        new_parts = []
+        for part in text_parts:
+            new_parts.extend(part.split(sep))
+        text_parts = new_parts
+
+    high_raw = extract_number_after(text_parts, ["高压", "高壓"])
+    low_raw = extract_number_after(text_parts, ["低压", "低壓"])
+    pulse_raw = extract_number_after(text_parts, ["脉率", "心率", "脉搏", "脈", "次"])
+
+    if not high_raw or not low_raw or not pulse_raw:
+        high_patterns = [r"高压[\s\S]*?(\d{3})", r"高压[\s\S]*?(\d{2}[^\d])", r"高压.*?(\d{2,3})"]
+        for pattern in high_patterns:
+            match = re.search(pattern, normalized_text)
+            if match:
+                val = int(match.group(1))
+                if 90 <= val <= 200:
+                    high_raw = val
+                    break
+
+        low_patterns = [r"低压[\s\S]*?(\d{3})", r"低压[\s\S]*?(\d{2}[^\d])", r"低压.*?(\d{2,3})"]
+        for pattern in low_patterns:
+            match = re.search(pattern, normalized_text)
+            if match:
+                val = int(match.group(1))
+                if 50 <= val <= 130:
+                    low_raw = val
+                    break
+
+        pulse_patterns = [r"脉率[\s\S]*?(\d{3})", r"心率[\s\S]*?(\d{2}[^\d])", r"心率.*?(\d{2,3})", r"脉率.*?(\d{2,3})"]
+        for pattern in pulse_patterns:
+            match = re.search(pattern, normalized_text)
+            if match:
+                val = int(match.group(1))
+                if 40 <= val <= 200:
+                    pulse_raw = val
+                    break
+
+    if not all([high_raw, low_raw, pulse_raw]):
+        all_numbers = re.findall(r"\d+", normalized_text)
+        for num_str in all_numbers:
+            try:
+                val = int(num_str)
+                if 90 <= val <= 200 and not high_raw:
+                    high_raw = val
+                elif 50 <= val <= 130 and not low_raw:
+                    low_raw = val
+                elif 40 <= val <= 200 and not pulse_raw:
+                    pulse_raw = val
+            except:
+                continue
+
+    if high_raw and low_raw and pulse_raw:
+        if high_raw > low_raw:
+            return {
+                "success": True,
+                "data": {
+                    "high": int(high_raw),
+                    "low": int(low_raw),
+                    "pulse": int(pulse_raw),
+                    "diff": int(high_raw - low_raw),
+                },
+                "text": original_text,
+            }
+
+    return {"success": False, "error": "未能提取血压数据", "text": original_text}
+
+
+# ========== HTTPS证书生成 ==========
+
+def create_self_signed_cert():
+    """生成自签名证书（如果不存在）"""
+    cert_file = WORKSPACE / "cert.pem"
+    key_file = WORKSPACE / "key.pem"
+
+    if cert_file.exists() and key_file.exists():
+        print(f"📜 证书已存在: {cert_file}")
+        return str(cert_file), str(key_file)
+
+    print("🔐 正在生成自签名证书...")
+    try:
+        subprocess.run([
+            "openssl", "req", "-x509", "-newkey", "rsa:2048",
+            "-keyout", str(key_file), "-out", str(cert_file),
+            "-days", "365", "-nodes",
+            "-subj", "/CN=localhost"
+        ], check=True, capture_output=True)
+        print(f"✅ 证书生成成功: {cert_file}")
+        return str(cert_file), str(key_file)
+    except subprocess.CalledProcessError as e:
+        print(f"❌ 证书生成失败: {e.stderr.decode()}")
+        print("⚠️ 将以HTTP模式运行")
+        return None, None
+    except FileNotFoundError:
+        print("❌ 未找到openssl命令，请先安装openssl")
+        print("⚠️ 将以HTTP模式运行")
+        return None, None
+
+
+# ========== HTTP请求处理 ==========
+
+class Handler(SimpleHTTPRequestHandler):
+    def do_GET(self):
+        if self.path == "/" or self.path == "/index.html":
+            index_file = WORKSPACE / "index.html"
+            if index_file.exists():
+                self.send_response(200)
+                self.send_header("Content-type", "text/html; charset=utf-8")
+                self.end_headers()
+                self.wfile.write(index_file.read_bytes())
+            else:
+                self.send_response(404)
+                self.end_headers()
+                self.wfile.write(b"index.html not found")
+        elif self.path == "/records":
+            records = []
+            if RECORDS_DIR.exists():
+                recs = sorted(RECORDS_DIR.glob("*.md"), reverse=True)
+                if recs:
+                    content = recs[0].read_text()
+                    lines = [l for l in content.split("\n") if l.startswith("- 20")]
+                    for line in lines[-10:]:
+                        try:
+                            parts = line.replace("- ", "").split("---")
+                            records.append({
+                                "date": parts[0],
+                                "data": parts[1] if len(parts) > 1 else "",
+                            })
+                        except:
+                            pass
+            self.send_response(200)
+            self.send_header("Content-type", "application/json")
+            self.end_headers()
+            self.wfile.write(json.dumps(records).encode("utf-8"))
+        elif self.path == "/log":
+            log_text = "\n".join(rec_state["log"][-20:]) if rec_state["log"] else "等待操作..."
+            self.send_response(200)
+            self.send_header("Content-type", "text/plain; charset=utf-8")
+            self.end_headers()
+            self.wfile.write(log_text.encode("utf-8"))
+        else:
+            self.send_response(404)
+            self.end_headers()
+
+    def do_POST(self):
+        if self.path == "/normalize":
+            content_length = int(self.headers.get("Content-Length", 0))
+            body = self.rfile.read(content_length)
+            try:
+                req = json.loads(body)
+                text = req.get("text", "")
+                result = extract_bp_data(text)
+                self.send_response(200)
+                self.send_header("Content-type", "application/json")
+                self.end_headers()
+                self.wfile.write(json.dumps(result, ensure_ascii=False).encode("utf-8"))
+            except Exception as e:
+                self.send_response(500)
+                self.send_header("Content-type", "application/json")
+                self.end_headers()
+                self.wfile.write(json.dumps({"success": False, "error": str(e)}).encode("utf-8"))
+
+        elif self.path == "/process-webm":
+            content_type = self.headers.get("Content-Type", "")
+            content_length = int(self.headers.get("Content-Length", 0))
+
+            boundary = None
+            if "boundary=" in content_type:
+                boundary = ("--" + content_type.split("boundary=")[1]).encode()
+
+            body = self.rfile.read(content_length)
+
+            if boundary:
+                parts = body.split(boundary)
+                for part in parts:
+                    if b"audio" in part and b"filename=" in part:
+                        header_end = part.find(b"\r\n\r\n")
+                        if header_end > 0:
+                            audio_data = part[header_end + 4:].rstrip(b"\r\n")
+                            if len(audio_data) > 100:
+                                result = self._process_webm_audio(audio_data)
+                                self.send_response(200)
+                                self.send_header("Content-type", "application/json")
+                                self.end_headers()
+                                self.wfile.write(json.dumps(result, ensure_ascii=False).encode("utf-8"))
+                                return
+
+            self.send_response(200)
+            self.send_header("Content-type", "application/json")
+            self.end_headers()
+            self.wfile.write(b'{"status":"ok"}')
+
+        elif self.path == "/save-record":
+            content_length = int(self.headers.get("Content-Length", 0))
+            body = self.rfile.read(content_length)
+            try:
+                req = json.loads(body)
+
+                high = req.get("high")
+                low = req.get("low")
+                pulse = req.get("pulse")
+                diff = req.get("diff")
+                count = req.get("count", 1)
+                timestamp = req.get("timestamp", datetime.now().strftime("%Y-%m-%d %H:%M"))
+
+                record_line = f"- {timestamp}---{high}/{low}({diff})-{pulse}🩺B"
+                if count > 1:
+                    record_line += f" ({count}次平均)"
+
+                RECORDS_DIR.mkdir(exist_ok=True)
+                month_file = RECORDS_DIR / f"{datetime.now().strftime('%Y-%m')}.md"
+                if month_file.exists():
+                    content = month_file.read_text()
+                    lines = content.split("\n")
+                    lines.insert(1, record_line)
+                    month_file.write_text("\n".join(lines))
+                else:
+                    month_file.write_text(f"# {datetime.now().strftime('%Y年%m月')} 血压记录\n\n{record_line}\n")
+
+                self.send_response(200)
+                self.send_header("Content-type", "application/json")
+                self.end_headers()
+                self.wfile.write(json.dumps({"success": True}).encode("utf-8"))
+
+            except Exception as e:
+                self.send_response(500)
+                self.send_header("Content-type", "application/json")
+                self.end_headers()
+                self.wfile.write(json.dumps({"success": False, "error": str(e)}).encode("utf-8"))
+
+        else:
+            self.send_response(404)
+            self.end_headers()
+
+    def _process_webm_audio(self, webm_data):
+        """处理WebM音频文件"""
+        rec_state["log"].append(f"[{datetime.now().strftime('%H:%M:%S')}] 收到WebM数据 {len(webm_data)} bytes")
+
+        ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+        webm_file = RECORDINGS_DIR / f"rec_{ts}.webm"
+        webm_file.write_bytes(webm_data)
+
+        rec_state["log"].append(f"[{datetime.now().strftime('%H:%M:%S')}] 保存: {webm_file.name}")
+
+        try:
+            import whisper
+            model = whisper.load_model("medium")
+            res = model.transcribe(
+                str(webm_file),
+                language="zh",
+                temperature=0.1,
+                verbose=False,
+                initial_prompt="血压测量，高压低压脉率，毫米汞柱，次每分",
+            )
+            text = res["text"].strip()
+            rec_state["log"].append(f"识别: {text}")
+
+            result = extract_bp_data(text)
+            if result.get("success"):
+                d = result["data"]
+                rec_state["log"].append(f"✅ {d['high']}/{d['low']}({d['diff']})-{d['pulse']}")
+                return {"success": True, "data": d, "text": text}
+            else:
+                rec_state["log"].append(f"⚠️ {result.get('error')}")
+                return {"success": False, "error": result.get("error"), "text": text}
+        except Exception as e:
+            rec_state["log"].append(f"❌ {e}")
+            return {"success": False, "error": str(e)}
+
+    def log_message(self, format, *args):
+        pass
+
+
+# ========== 主程序 ==========
+
+def main():
+    parser = argparse.ArgumentParser(
+        description="BPRecorder Server - 血压记录后端服务",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""
+示例:
+  ./bpserver                      # 默认监听 0.0.0.0:18888
+  ./bpserver 192.168.1.100:8080   # 指定地址和端口
+  ./bpserver --port 9000          # 只改端口
+  ./bpserver --no-https           # 使用HTTP而非HTTPS
+
+首次访问HTTPS时，浏览器会提示"不安全"，点击"继续访问"即可。
+        """
+    )
+    parser.add_argument("address", nargs="?", default="0.0.0.0:18888",
+                        help="监听地址，格式: IP:PORT (默认: 0.0.0.0:18888)")
+    parser.add_argument("--port", "-p", type=int, help="监听端口")
+    parser.add_argument("--no-https", action="store_true", help="使用HTTP而非HTTPS")
+
+    args = parser.parse_args()
+
+    # 解析地址
+    if ":" in args.address:
+        host, port = args.address.rsplit(":", 1)
+        port = int(port)
+    else:
+        host = args.address
+        port = 18888
+
+    if args.port:
+        port = args.port
+
+    # 创建服务器
+    server = HTTPServer((host, port), Handler)
+
+    # HTTPS配置
+    use_https = not args.no_https
+    if use_https:
+        cert_file, key_file = create_self_signed_cert()
+        if cert_file and key_file:
+            context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+            context.load_cert_chain(cert_file, key_file)
+            server.socket = context.wrap_socket(server.socket, server_side=True)
+            protocol = "HTTPS"
+        else:
+            protocol = "HTTP"
+    else:
+        protocol = "HTTP"
+
+    # 显示启动信息
+    print("=" * 50)
+    print("🩺 BPRecorder Server")
+    print("=" * 50)
+    print(f"📡 监听: {protocol.lower()}://{host}:{port}")
+    print(f"📁 工作目录: {WORKSPACE}")
+    if protocol == "HTTPS":
+        print("⚠️  首次访问会提示'不安全'，点击'继续访问'即可")
+    print("=" * 50)
+
+    try:
+        server.serve_forever()
+    except KeyboardInterrupt:
+        print("\n👋 服务器已停止")
+        server.shutdown()
+
+
+if __name__ == "__main__":
+    main()
