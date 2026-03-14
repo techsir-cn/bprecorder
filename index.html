@@ -213,7 +213,7 @@
 </head>
 <body>
 
-<div style="text-align:center;color:#999;font-size:12px;margin-bottom:8px;">v0.2-2603140051</div>
+<div style="text-align:center;color:#999;font-size:12px;margin-bottom:8px;">v0.2-2603140052</div>
 
 <!-- 原始记录 -->
 <div class="card">
@@ -224,7 +224,7 @@
         <textarea id="resultText" class="recognition-input" placeholder="可以手工按顺序输入高压/低压/心率数字，不同数字间要用空格或符号隔开，不能紧挨，也可以点击识别按钮，长按识别可以配置识别方式" oninput="checkAndShowExtracted()"></textarea>
         <div class="transfer-section" style="gap: 10px;">
             <button id="dictateBtn" class="btn btn-dictate">识别</button>
-            <button id="addBtn" class="btn btn-transfer" disabled>提取</button>
+            <button id="addBtn" class="btn btn-transfer">提取</button>
         </div>
     </div>
     <!-- 识别配置区 -->
@@ -564,7 +564,6 @@ if (!SpeechRecognition) {
             }
             dictateBtn.textContent = '识别';
             dictateBtn.className = 'btn btn-dictate';
-            addBtn.disabled = false;
         }
     };
 }
@@ -574,7 +573,6 @@ function startListening() {
     finalTranscript = '';
     resultText.value = '';
     extractedPreview.style.display = 'none';
-    addBtn.disabled = true;
     
     dictateBtn.textContent = '停止';
     dictateBtn.className = 'btn btn-dictate listening';
@@ -599,9 +597,6 @@ function stopListening() {
     statusDiv.className = 'status success';
     
     try { recognition.stop(); } catch(e) {}
-    
-    // 恢复下箭头可用
-    addBtn.disabled = false;
 }
 
 // 提取三个数字（按位置：第1个=高压，第2个=低压，第3个=心率）
@@ -660,10 +655,8 @@ function checkAndShowExtracted() {
             <strong>${methodText}</strong> 
             高压${nums.high || '-'} / 低压${nums.low || '-'} / 心率${nums.pulse || '-'}
         `;
-        addBtn.disabled = false;
     } else {
         extractedPreview.style.display = 'none';
-        addBtn.disabled = !text.trim();
     }
 }
 
@@ -688,7 +681,6 @@ addBtn.onclick = function() {
     finalTranscript = '';
     resultText.value = '';
     extractedPreview.style.display = 'none';
-    addBtn.disabled = true;
     statusDiv.textContent = '✅ 已加入待处理区';
     statusDiv.className = 'status success';
 };
