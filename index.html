@@ -213,11 +213,11 @@
 </head>
 <body>
 
-<div style="text-align:center;color:#999;font-size:12px;margin-bottom:8px;">v0.2-2603140054</div>
+<div style="text-align:center;color:#999;font-size:12px;margin-bottom:8px;">v0.2-2603140055</div>
 
-<!-- 原始记录 -->
+<!-- 测量数据 -->
 <div class="card">
-    <h2>📝 原始记录</h2>
+    <h2>📝 测量数据</h2>
     <div id="status" class="status info">支持直接输入和<span id="currentMethod">前端听写</span></div>
     <div id="extractedPreview" class="extracted-preview" style="display:none;"></div>
     <div class="recognition-area">
@@ -657,7 +657,7 @@ function checkAndShowExtracted() {
     }
 }
 
-// 原始记录 → 待处理区
+// 测量数据 → 待处理区
 addBtn.onclick = function() {
     const text = resultText.value;
     if (!text.trim()) return;
