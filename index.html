@@ -213,7 +213,7 @@
 </head>
 <body>
 
-<div style="text-align:center;color:#999;font-size:12px;margin-bottom:8px;">v0.2-2603140048</div>
+<div style="text-align:center;color:#999;font-size:12px;margin-bottom:8px;">v0.2-2603140049</div>
 
 <!-- 原始记录 -->
 <div class="card">
@@ -234,7 +234,7 @@
         <label style="display:block; margin:8px 0; color:#999;"><input type="radio" name="recognitionMethod" value="cloud" disabled> 云端听写(预留)</label>
         <label style="display:block; margin:8px 0; color:#999;"><input type="radio" name="recognitionMethod" value="bluetooth" disabled> 蓝牙识别(预留)</label>
         <label style="display:block; margin:8px 0; color:#999;"><input type="radio" name="recognitionMethod" value="camera" disabled> 拍照识别(预留)</label>
-        <button id="saveRecognitionBtn" class="btn btn-primary" style="margin-top:8px; width:100%;" onclick="document.getElementById('recognitionConfig').style.display='none'">保存</button>
+        <button id="saveRecognitionBtn" class="btn btn-primary" style="margin-top:8px; width:100%;">保存</button>
     </div>
     <!-- 提取配置区 -->
     <div id="extractionConfig" style="display:none; margin-top:12px; padding:12px; background:#f5f5f5; border-radius:8px;">
@@ -251,7 +251,7 @@
             <input type="text" id="modelToken" style="width:100%; padding:8px; border:1px solid #ddd; border-radius:4px; margin-bottom:4px;" placeholder="Token(可选)">
             <textarea id="modelPrompt" style="width:100%; padding:8px; border:1px solid #ddd; border-radius:4px; min-height:60px;" placeholder="提示词"></textarea>
         </div>
-        <button id="saveExtractionBtn" class="btn btn-primary" style="margin-top:8px; width:100%;" onclick="saveExtractionConfig(); document.getElementById('extractionConfig').style.display='none'">保存</button>
+        <button id="saveExtractionBtn" class="btn btn-primary" style="margin-top:8px; width:100%;">保存</button>
     </div>
 </div>
 
@@ -262,7 +262,7 @@
         <div class="empty-msg">暂无数据</div>
     </div>
     <div style="margin-top:12px;">
-        <button id="recordBtn" class="btn btn-primary" style="width:100%; -webkit-user-select:none; user-select:none;">计算平均   生成记录</button>
+        <button id="recordBtn" class="btn btn-primary" style="width:100%; -webkit-user-select:none; user-select:none;">计算平均/生成记录</button>
     </div>
 </div>
 
@@ -277,7 +277,7 @@
         <div style="font-weight:bold; margin-bottom:8px;">记录格式配置</div>
         <input type="text" id="recordFormat" value="HH:MM---high/low(diff)-pulse🩺" style="width:100%; padding:8px; border:1px solid #ddd; border-radius:4px;">
         <div style="font-size:12px; color: #666; margin-top:4px;">可用变量: HH(时) MM(分) high(高压) low(低压) diff(压差) pulse(心率)</div>
-        <button id="saveRecordBtn" class="btn btn-primary" style="margin-top:8px; width:100%;" onclick="saveRecordConfig(); document.getElementById('recordConfig').style.display='none'">保存</button>
+        <button id="saveRecordBtn" class="btn btn-primary" style="margin-top:8px; width:100%;">保存</button>
     </div>
 </div>
 
@@ -323,7 +323,6 @@ function saveRecognitionConfig() {
     config.recognition.current = selected;
     localStorage.setItem('recognitionCurrent', selected);
     updateCurrentMethod();
-    document.getElementById('recognitionConfig').style.display = 'none';
 }
 
 // 切换提取配置显示
@@ -362,15 +361,12 @@ function saveExtractionConfig() {
     localStorage.setItem('modelUrl', config.extraction.model.url);
     localStorage.setItem('modelToken', config.extraction.model.token);
     localStorage.setItem('modelPrompt', config.extraction.model.prompt);
-    
-    document.getElementById('extractionConfig').style.display = 'none';
 }
 
 // 保存记录配置
 function saveRecordConfig() {
     config.record.format = document.getElementById('recordFormat').value;
     localStorage.setItem('recordFormat', config.record.format);
-    document.getElementById('recordConfig').style.display = 'none';
     renderRecords();
 }
 
@@ -415,17 +411,26 @@ function setupLongPress(elementId, configDivId, initFunc) {
 }
 
 // 统一处理保存按钮点击
-function setupSaveButton(btnId, saveFunc) {
+function setupSaveButton(btnId, saveFunc, configDivId) {
     const btn = document.getElementById(btnId);
     if (!btn) return;
     
-    // 直接设置onclick，确保事件处理器优先级最高
+    // click事件
     btn.onclick = function(e) {
         e.stopPropagation();
         e.preventDefault();
         saveFunc();
+        document.getElementById(configDivId).style.display = 'none';
         return false;
     };
+    
+    // touchend事件（移动端更可靠）
+    btn.addEventListener('touchend', function(e) {
+        e.stopPropagation();
+        e.preventDefault();
+        saveFunc();
+        document.getElementById(configDivId).style.display = 'none';
+    }, { passive: false });
 }
 
 document.addEventListener('DOMContentLoaded', function() {
@@ -435,9 +440,9 @@ document.addEventListener('DOMContentLoaded', function() {
         document.getElementById('recordFormat').value = config.record.format;
     });
     
-    setupSaveButton('saveRecognitionBtn', saveRecognitionConfig);
-    setupSaveButton('saveExtractionBtn', saveExtractionConfig);
-    setupSaveButton('saveRecordBtn', saveRecordConfig);
+    setupSaveButton('saveRecognitionBtn', saveRecognitionConfig, 'recognitionConfig');
+    setupSaveButton('saveExtractionBtn', saveExtractionConfig, 'extractionConfig');
+    setupSaveButton('saveRecordBtn', saveRecordConfig, 'recordConfig');
 });
 
 // 初始化
@@ -650,7 +655,7 @@ function checkAndShowExtracted() {
     if (nums.high || nums.low || nums.pulse) {
         extractedPreview.style.display = 'block';
         
-        const methodText = nums.method === 'position' ? '（固定顺序：高压/低压/心率）' : '（按关键词匹配）';
+        const methodText = nums.method === 'position' ? '预设的固定顺序为高压/低压/心率' : '（按关键词匹配）';
         extractedPreview.innerHTML = `
             <strong>${methodText}</strong> 
             高压${nums.high || '-'} / 低压${nums.low || '-'} / 心率${nums.pulse || '-'}
