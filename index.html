@@ -207,13 +207,12 @@
 </head>
 <body>
 
-<div style="text-align:center;color:#999;font-size:12px;margin-bottom:8px;">v0.2-2603140034</div>
+<div style="text-align:center;color:#999;font-size:12px;margin-bottom:8px;">v0.2-2603140035</div>
 
 <!-- 识别区 -->
 <div class="card">
     <h2>📝 识别区（输入区）</h2>
-    <div id="browserTip" class="browser-tip" style="margin-bottom:4px;"></div>
-    <div id="status" class="status info" style="margin-bottom:6px;">支持直接输入和<span id="currentMethod">前端听写</span></div>
+    <div id="status" class="status info">支持直接输入和<span id="currentMethod">前端听写</span></div>
     <div id="extractedPreview" class="extracted-preview" style="display:none;"></div>
     <div class="recognition-area">
         <textarea id="resultText" class="recognition-input" placeholder="可以手工输入血压数据，或点击右侧识别按钮..." oninput="checkAndShowExtracted()"></textarea>
@@ -518,7 +517,7 @@ if (!SpeechRecognition) {
         }
         statusDiv.textContent = '⚠️ ' + msg;
         statusDiv.className = 'status error';
-        dictateBtn.textContent = '🎤';
+        dictateBtn.textContent = '识别';
         dictateBtn.className = 'btn btn-dictate';
         isListening = false;
     };
@@ -531,9 +530,9 @@ if (!SpeechRecognition) {
             // 用户主动停止
             // 检查 finalTranscript 是否有内容
             if (finalTranscript) {
-                statusDiv.textContent = '✅ 听写结束，识别到: ' + finalTranscript;
+                statusDiv.textContent = '✅ 识别结束，识别到: ' + finalTranscript;
             }
-            dictateBtn.textContent = '🎤';
+            dictateBtn.textContent = '识别';
             dictateBtn.className = 'btn btn-dictate';
             addBtn.disabled = false;
         }
@@ -555,18 +554,18 @@ function startListening() {
     try { 
         recognition.start(); 
     } catch(e) {
-        statusDiv.textContent = '⚠️ 无法启动听写: ' + e.message;
+        statusDiv.textContent = '⚠️ 无法启动识别: ' + e.message;
         statusDiv.className = 'status error';
         isListening = false;
-        dictateBtn.textContent = '听写';
+        dictateBtn.textContent = '识别';
     }
 }
 
 function stopListening() {
     isListening = false;
-    dictateBtn.textContent = '听写';
+    dictateBtn.textContent = '识别';
     dictateBtn.className = 'btn btn-dictate';
-    statusDiv.textContent = '✅ 听写结束';
+    statusDiv.textContent = '✅ 识别结束';
     statusDiv.className = 'status success';
     
     try { recognition.stop(); } catch(e) {}
