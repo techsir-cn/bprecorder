@@ -213,15 +213,15 @@
 </head>
 <body>
 
-<div style="text-align:center;color:#999;font-size:12px;margin-bottom:8px;">v0.2-2603140046</div>
+<div style="text-align:center;color:#999;font-size:12px;margin-bottom:8px;">v0.2-2603140047</div>
 
-<!-- 识别区 -->
+<!-- 原始记录 -->
 <div class="card">
-    <h2>📝 识别区（输入区）</h2>
+    <h2>📝 原始记录</h2>
     <div id="status" class="status info">支持直接输入和<span id="currentMethod">前端听写</span></div>
     <div id="extractedPreview" class="extracted-preview" style="display:none;"></div>
     <div class="recognition-area">
-        <textarea id="resultText" class="recognition-input" placeholder="可以手工按顺序输入高压/低压/心率数字，输入时要用空格或符号隔开不能连起来&#10;也可以点击识别按钮，长按识别可以配置识别方式" oninput="checkAndShowExtracted()"></textarea>
+        <textarea id="resultText" class="recognition-input" placeholder="可以手工按顺序输入高压/低压/心率数字&#10;不同数字间要用空格或符号隔开，不能紧挨&#10;也可以点击识别按钮，长按识别可以配置识别方式" oninput="checkAndShowExtracted()"></textarea>
         <div class="transfer-section" style="gap: 10px;">
             <button id="dictateBtn" class="btn btn-dictate">识别</button>
             <button id="addBtn" class="btn btn-transfer" disabled>提取</button>
@@ -255,20 +255,20 @@
     </div>
 </div>
 
-<!-- 待选区 -->
+<!-- 待处理区 -->
 <div class="card">
-    <h2>📋 待选区（数字提取结果）</h2>
+    <h2>📋 待处理区</h2>
     <div id="pendingList">
         <div class="empty-msg">暂无数据</div>
     </div>
     <div style="margin-top:12px;">
-        <button id="recordBtn" class="btn btn-primary" style="width:100%; -webkit-user-select:none; user-select:none;">计算平均 生成记录</button>
+        <button id="recordBtn" class="btn btn-primary" style="width:100%; -webkit-user-select:none; user-select:none;">计算平均  生成记录</button>
     </div>
 </div>
 
-<!-- 记录区 -->
+<!-- 正式记录 -->
 <div class="card">
-    <h2 id="recordTitle">📚 记录区（格式化结果）</h2>
+    <h2 id="recordTitle">📚 正式记录</h2>
     <div id="recordList">
         <div class="empty-msg">暂无记录</div>
     </div>
@@ -530,13 +530,15 @@ if (!SpeechRecognition) {
         console.log('onerror:', event.error);
         let msg = event.error;
         if (msg === 'not-allowed' || msg === 'permission-denied') {
-            msg = '麦克风权限被拒绝，请允许浏览器使用麦克风';
+            msg = '麦克风权限被拒绝，请在设置中允许';
         } else if (msg === 'no-speech') {
             msg = '未检测到语音';
         } else if (msg === 'network') {
-            msg = '网络错误';
+            msg = '网络错误，请检查网络连接';
+        } else if (msg === 'aborted') {
+            msg = '识别被中断';
         } else {
-            msg = event.error + ' - 尝试使用本地模型';
+            msg = '识别错误: ' + event.error;
         }
         statusDiv.textContent = '⚠️ ' + msg;
         statusDiv.className = 'status error';
@@ -660,7 +662,7 @@ function checkAndShowExtracted() {
     }
 }
 
-// 识别区 → 待选区
+// 原始记录 → 待处理区
 addBtn.onclick = function() {
     const text = resultText.value;
     if (!text.trim()) return;
@@ -682,7 +684,7 @@ addBtn.onclick = function() {
     resultText.value = '';
     extractedPreview.style.display = 'none';
     addBtn.disabled = true;
-    statusDiv.textContent = '✅ 已加入待选区';
+    statusDiv.textContent = '✅ 已加入待处理区';
     statusDiv.className = 'status success';
 };
 
@@ -891,10 +893,10 @@ recordBtn.onclick = function() {
     recordData.unshift(result);
     renderRecords();
     
-    // 待选区显示"已采纳"状态，不立即清空
-    pendingList.innerHTML = '<div class="status success" style="padding:20px;text-align:center;">✅ 已采纳到记录区</div>';
+    // 待处理区显示"已采纳"状态，不立即清空
+    pendingList.innerHTML = '<div class="status success" style="padding:20px;text-align:center;">✅ 已采纳到正式记录</div>';
     
-    // 延迟清空待选区
+    // 延迟清空待处理区
     setTimeout(() => {
         pendingData = [];
         renderPending();
