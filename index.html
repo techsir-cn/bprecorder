@@ -219,7 +219,7 @@
 </head>
 <body>
 
-<div style="text-align:center;color:#999;font-size:12px;margin-bottom:8px;">v0.2-2603140039</div>
+<div style="text-align:center;color:#999;font-size:12px;margin-bottom:8px;">v0.2-2603140040</div>
 
 <!-- 识别区 -->
 <div class="card">
@@ -227,16 +227,18 @@
     <div id="status" class="status info">支持直接输入和<span id="currentMethod">前端听写</span></div>
     <div id="extractedPreview" class="extracted-preview" style="display:none;"></div>
     <div class="recognition-area" style="position:relative;">
-        <textarea id="resultText" class="recognition-input" placeholder="可以手工输入血压数据，或点击右侧识别按钮..." oninput="checkAndShowExtracted()" style="padding-bottom:40px;"></textarea>
+        <textarea id="resultText" class="recognition-input" placeholder="可以手工输入血压数据，或点击右侧识别按钮..." oninput="checkAndShowExtracted()" style="padding-bottom:50px;"></textarea>
         <!-- 框选提取区（在输入框内底部） -->
         <div id="dragSelectArea" style="position:absolute; bottom:4px; left:8px; right:68px; pointer-events:none;">
-            <div style="font-size:9px; color:#999; background:#f5f5f5; padding:2px 4px; border-radius:2px; margin-bottom:2px; pointer-events:none;">纯数字情况下默认提取逻辑是按高压/低压/心率固定顺序提取，如果不是请点击相应色块到相应数字上再次点击释放即可</div>
-            <div style="display:flex; gap:4px; align-items:center; pointer-events:auto;">
-                <div class="drag-box" data-type="high" style="width:28px; height:20px; border:2px solid #9b59b6; border-radius:4px; display:flex; align-items:center; justify-content:center; font-size:10px; color:#9b59b6; cursor:pointer; background:white;">高压</div>
-                <div class="drag-box" data-type="low" style="width:24px; height:20px; border:2px solid #3498db; border-radius:4px; display:flex; align-items:center; justify-content:center; font-size:10px; color:#3498db; cursor:pointer; background:white;">低压</div>
-                <div class="drag-box" data-type="pulse" style="width:24px; height:20px; border:2px solid #27ae60; border-radius:4px; display:flex; align-items:center; justify-content:center; font-size:10px; color:#27ae60; cursor:pointer; background:white;">心率</div>
+            <div style="font-size:9px; color:#aaa; padding:2px 0; pointer-events:none;">纯数字按高压/低压/心率顺序提取，如错误请点击色块再点击数字</div>
+            <div style="display:flex; gap:6px; align-items:center; pointer-events:auto;">
+                <div class="drag-box" data-type="high" style="width:34px; height:24px; border:2px solid #9b59b6; border-radius:4px; display:flex; align-items:center; justify-content:center; font-size:11px; color:#9b59b6; cursor:pointer; background:white; white-space:nowrap;">高压</div>
+                <div class="drag-box" data-type="low" style="width:34px; height:24px; border:2px solid #3498db; border-radius:4px; display:flex; align-items:center; justify-content:center; font-size:11px; color:#3498db; cursor:pointer; background:white; white-space:nowrap;">低压</div>
+                <div class="drag-box" data-type="pulse" style="width:34px; height:24px; border:2px solid #27ae60; border-radius:4px; display:flex; align-items:center; justify-content:center; font-size:11px; color:#27ae60; cursor:pointer; background:white; white-space:nowrap;">心率</div>
             </div>
         </div>
+        <!-- 选中位置标记 -->
+        <div id="selectMarker" style="display:none; position:absolute; background:rgba(155,89,182,0.3); border:2px solid #9b59b6; border-radius:4px; pointer-events:none;"></div>
         <div class="transfer-section" style="gap: 10px;">
             <button id="dictateBtn" class="btn btn-dictate">识别</button>
             <button id="addBtn" class="btn btn-transfer" disabled>提取</button>
@@ -424,6 +426,24 @@ const dragSelect = {
 // 当前选中的框类型
 let activeDragBox = null;
 
+// 显示选中标记
+function showSelectMarker(x, y, width, height, color) {
+    const marker = document.getElementById('selectMarker');
+    marker.style.left = x + 'px';
+    marker.style.top = y + 'px';
+    marker.style.width = width + 'px';
+    marker.style.height = height + 'px';
+    marker.style.borderColor = color;
+    marker.style.background = color.replace(')', ',0.3)').replace('rgb', 'rgba');
+    marker.style.display = 'block';
+    
+    // 闪烁效果
+    marker.style.opacity = '1';
+    setTimeout(() => { marker.style.opacity = '0.5'; }, 100);
+    setTimeout(() => { marker.style.opacity = '1'; }, 200);
+    setTimeout(() => { marker.style.display = 'none'; }, 1000);
+}
+
 // 初始化点击选择框
 function initDragBoxes() {
     const dragBoxes = document.querySelectorAll('.drag-box');
@@ -433,9 +453,14 @@ function initDragBoxes() {
         box.addEventListener('click', function(e) {
             e.stopPropagation();
             // 取消其他框的选中状态
-            dragBoxes.forEach(b => b.style.background = 'white');
-            // 选中当前框
+            dragBoxes.forEach(b => {
+                b.style.background = 'white';
+                b.style.transform = 'scale(1)';
+            });
+            // 选中当前框，放大高亮
             this.style.background = '#fffde7';
+            this.style.transform = 'scale(1.1)';
+            this.style.boxShadow = '0 0 8px rgba(0,0,0,0.2)';
             activeDragBox = this.dataset.type;
         });
     });
@@ -473,6 +498,7 @@ function initDragBoxes() {
         
         // 找到最接近的数字
         let closestNum = null;
+        let closestNumIndex = -1;
         let minDist = Infinity;
         let searchIndex = 0;
         for (let num of allNumbers) {
@@ -482,6 +508,7 @@ function initDragBoxes() {
                 if (dist < minDist) {
                     minDist = dist;
                     closestNum = parseInt(num);
+                    closestNumIndex = numIndex;
                 }
                 searchIndex = numIndex + num.length;
             }
@@ -491,6 +518,13 @@ function initDragBoxes() {
             dragSelect[activeDragBox] = closestNum;
             updateDragBoxDisplay(activeDragBox, closestNum);
             updateExtractButton();
+            
+            // 显示选中标记
+            const colors = { high: '#9b59b6', low: '#3498db', pulse: '#27ae60' };
+            const numWidth = closestNum.toString().length * 12;
+            const markerX = 8 + closestNumIndex * 8;
+            const markerY = 8 + line * lineHeight;
+            showSelectMarker(markerX, markerY, numWidth, lineHeight - 4, colors[activeDragBox]);
         }
         
         resetActiveBox();
@@ -499,10 +533,11 @@ function initDragBoxes() {
 
 // 重置选中状态
 function resetActiveBox() {
-    if (activeDragBox) {
-        const box = document.querySelector(`.drag-box[data-type="${activeDragBox}"]`);
-        if (box) box.style.background = 'white';
-    }
+    document.querySelectorAll('.drag-box').forEach(b => {
+        b.style.background = 'white';
+        b.style.transform = 'scale(1)';
+        b.style.boxShadow = 'none';
+    });
     activeDragBox = null;
 }
 
