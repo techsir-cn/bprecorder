@@ -207,28 +207,56 @@
 </head>
 <body>
 
-<div style="text-align:center;color:#999;font-size:12px;margin-bottom:8px;">v0.1-2603130032</div>
+<div style="text-align:center;color:#999;font-size:12px;margin-bottom:8px;">v0.2-2603140034</div>
 
 <!-- 识别区 -->
-<div class="card">
-    <h2>📝 识别区（输入区）</h2>
+<div class="card" id="recognitionCard">
+    <h2 id="recognitionTitle">📝 识别区</h2>
     <div id="browserTip" class="browser-tip" style="margin-bottom:4px;"></div>
-    <div id="status" class="status info" style="margin-bottom:6px;">点击🎤按钮开始语音输入，或手工输入</div>
+    <div id="status" class="status info" style="margin-bottom:6px;">支持直接输入和<span id="currentMethodDisplay">前端听写</span></div>
     <div id="extractedPreview" class="extracted-preview" style="display:none;"></div>
     <div class="recognition-area">
-        <textarea id="resultText" class="recognition-input" placeholder="可以手工输入血压数据，或点击右侧听写按钮语音输入..." oninput="checkAndShowExtracted()"></textarea>
+        <textarea id="resultText" class="recognition-input" placeholder="可以手工输入血压数据，或点击右侧识别按钮..." oninput="checkAndShowExtracted()"></textarea>
         <div class="transfer-section" style="gap: 10px;">
-            <button id="dictateBtn" class="btn btn-dictate">听写</button>
+            <button id="dictateBtn" class="btn btn-dictate">识别</button>
             <button id="addBtn" class="btn btn-transfer" disabled>提取</button>
         </div>
+    </div>
+    <!-- 识别配置区 -->
+    <div id="recognitionConfig" style="display:none; margin-top:12px; padding:12px; background:#f5f5f5; border-radius:8px;">
+        <div style="font-weight:bold; margin-bottom:8px;">识别方式配置</div>
+        <label style="display:block; margin:8px 0;"><input type="radio" name="recognitionMethod" value="browser" checked> 前端听写</label>
+        <label style="display:block; margin:8px 0; color:#999;"><input type="radio" name="recognitionMethod" value="cloud" disabled> 云端听写(预留)</label>
+        <label style="display:block; margin:8px 0; color:#999;"><input type="radio" name="recognitionMethod" value="bluetooth" disabled> 蓝牙识别(预留)</label>
+        <label style="display:block; margin:8px 0; color:#999;"><input type="radio" name="recognitionMethod" value="camera" disabled> 拍照识别(预留)</label>
+        <button class="btn btn-primary" onclick="saveRecognitionConfig()" style="margin-top:8px; width:100%;">保存</button>
     </div>
 </div>
 
 <!-- 待选区 -->
 <div class="card">
-    <h2>📋 待选区（数字提取结果）</h2>
+    <h2 id="pendingTitle">📋 待选区（数字提取结果）</h2>
     <div id="pendingList">
         <div class="empty-msg">暂无数据</div>
+    </div>
+    <!-- 提取配置区 -->
+    <div id="extractionConfig" style="display:none; margin-top:12px; padding:12px; background:#f5f5f5; border-radius:8px;">
+        <div style="font-weight:bold; margin-bottom:8px;">提取方式配置</div>
+        <label style="display:block; margin:8px 0;"><input type="radio" name="extractionMethod" value="regex" checked> 正则提取</label>
+        <label style="display:block; margin:8px 0; color:#999;"><input type="radio" name="extractionMethod" value="model" disabled> 小模型(预留)</label>
+        <div style="margin-top:12px;">
+            <div style="font-weight:bold; margin-bottom:4px;">高压关键词：</div>
+            <input type="text" id="regexHigh" value="高压|收缩压" style="width:100%; padding:8px; border:1px solid #ddd; border-radius:4px;">
+        </div>
+        <div style="margin-top:8px;">
+            <div style="font-weight:bold; margin-bottom:4px;">低压关键词：</div>
+            <input type="text" id="regexLow" value="低压|舒张压" style="width:100%; padding:8px; border:1px solid #ddd; border-radius:4px;">
+        </div>
+        <div style="margin-top:8px;">
+            <div style="font-weight:bold; margin-bottom:4px;">心率关键词：</div>
+            <input type="text" id="regexPulse" value="心率|脉率|脉搏|心跳" style="width:100%; padding:8px; border:1px solid #ddd; border-radius:4px;">
+        </div>
+        <button class="btn btn-primary" onclick="saveExtractionConfig()" style="margin-top:12px; width:100%;">保存</button>
     </div>
     <div style="margin-top:12px;">
         <button id="recordBtn" class="btn btn-primary" style="display:none; width:100%;">✅ 采纳</button>
@@ -237,13 +265,145 @@
 
 <!-- 记录区 -->
 <div class="card">
-    <h2>📚 记录区（格式化结果）</h2>
+    <h2 id="recordTitle">📚 记录区（格式化结果）</h2>
     <div id="recordList">
         <div class="empty-msg">暂无记录</div>
+    </div>
+    <!-- 记录格式配置区 -->
+    <div id="recordConfig" style="display:none; margin-top:12px; padding:12px; background:#f5f5f5; border-radius:8px;">
+        <div style="font-weight:bold; margin-bottom:8px;">记录格式配置</div>
+        <div style="font-size:12px; color:#666; margin-bottom:8px;">可用变量: HH(时), MM(分), high(高压), low(低压), diff(压差), pulse(心率)</div>
+        <input type="text" id="recordFormat" value="HH:MM---high/low(diff)-pulse🩺" style="width:100%; padding:8px; border:1px solid #ddd; border-radius:4px; margin-bottom:8px;">
+        <button class="btn btn-primary" onclick="saveRecordConfig()" style="width:100%;">保存</button>
     </div>
 </div>
 
 <script>
+// ========== 模块化配置 ==========
+const modules = {
+    recognition: {
+        current: localStorage.getItem('recognitionMethod') || 'browser',
+        methods: {
+            browser: { name: '前端听写', available: true },
+            cloud: { name: '云端听写', available: false },
+            bluetooth: { name: '蓝牙识别', available: false },
+            camera: { name: '拍照识别', available: false }
+        }
+    },
+    extraction: {
+        current: 'regex',
+        methods: {
+            regex: { name: '正则', available: true },
+            model: { name: '小模型', available: false }
+        }
+    },
+    storage: {
+        current: 'none',
+        methods: {
+            none: { name: '无存储', available: true },
+            cloud: { name: '云端存储', available: false }
+        }
+    }
+};
+
+// 提取模块配置
+const extractionConfig = {
+    highKeywords: JSON.parse(localStorage.getItem('regexHigh')) || ['高压', '收缩压'],
+    lowKeywords: JSON.parse(localStorage.getItem('regexLow')) || ['低压', '舒张压'],
+    pulseKeywords: JSON.parse(localStorage.getItem('regexPulse')) || ['心率', '脉率', '脉搏', '心跳']
+};
+
+// 保存提取配置
+function saveExtractionConfig() {
+    const high = document.getElementById('regexHigh').value.split('|');
+    const low = document.getElementById('regexLow').value.split('|');
+    const pulse = document.getElementById('regexPulse').value.split('|');
+    extractionConfig.highKeywords = high;
+    extractionConfig.lowKeywords = low;
+    extractionConfig.pulseKeywords = pulse;
+    localStorage.setItem('regexHigh', JSON.stringify(high));
+    localStorage.setItem('regexLow', JSON.stringify(low));
+    localStorage.setItem('regexPulse', JSON.stringify(pulse));
+    document.getElementById('extractionConfig').style.display = 'none';
+}
+
+// 待选区配置长按检测
+let pendingTitleTimer = null;
+document.getElementById('pendingTitle').addEventListener('touchstart', function(e) {
+    pendingTitleTimer = setTimeout(() => {
+        document.getElementById('extractionConfig').style.display = 'block';
+    }, 800);
+});
+document.getElementById('pendingTitle').addEventListener('touchend', function() {
+    if (pendingTitleTimer) clearTimeout(pendingTitleTimer);
+});
+document.getElementById('pendingTitle').addEventListener('contextmenu', function(e) {
+    e.preventDefault();
+    document.getElementById('extractionConfig').style.display = 'block';
+});
+
+// 记录格式配置
+const recordFormatConfig = {
+    template: localStorage.getItem('recordFormat') || 'HH:MM---high/low(diff)-pulse🩺'
+};
+
+// 保存记录格式配置
+function saveRecordConfig() {
+    const template = document.getElementById('recordFormat').value;
+    recordFormatConfig.template = template;
+    localStorage.setItem('recordFormat', template);
+    document.getElementById('recordConfig').style.display = 'none';
+    renderRecord();
+}
+
+// 记录区配置长按检测
+let recordTitleTimer = null;
+document.getElementById('recordTitle').addEventListener('touchstart', function(e) {
+    recordTitleTimer = setTimeout(() => {
+        document.getElementById('recordConfig').style.display = 'block';
+    }, 800);
+});
+document.getElementById('recordTitle').addEventListener('touchend', function() {
+    if (recordTitleTimer) clearTimeout(recordTitleTimer);
+});
+document.getElementById('recordTitle').addEventListener('contextmenu', function(e) {
+    e.preventDefault();
+    document.getElementById('recordConfig').style.display = 'block';
+});
+
+// 更新当前方式显示
+function updateMethodDisplay() {
+    const method = modules.recognition.methods[modules.recognition.current];
+    document.getElementById('currentMethodDisplay').textContent = method.name;
+}
+
+// 保存识别配置
+function saveRecognitionConfig() {
+    const selected = document.querySelector('input[name="recognitionMethod"]:checked').value;
+    modules.recognition.current = selected;
+    localStorage.setItem('recognitionMethod', selected);
+    updateMethodDisplay();
+    document.getElementById('recognitionConfig').style.display = 'none';
+}
+
+// 长按检测
+let recognitionTitleTimer = null;
+document.getElementById('recognitionTitle').addEventListener('touchstart', function(e) {
+    recognitionTitleTimer = setTimeout(() => {
+        document.getElementById('recognitionConfig').style.display = 'block';
+    }, 800);
+});
+document.getElementById('recognitionTitle').addEventListener('touchend', function() {
+    if (recognitionTitleTimer) clearTimeout(recognitionTitleTimer);
+});
+document.getElementById('recognitionTitle').addEventListener('contextmenu', function(e) {
+    e.preventDefault();
+    document.getElementById('recognitionConfig').style.display = 'block';
+});
+
+// 初始化
+updateMethodDisplay();
+
 const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
 const dictateBtn = document.getElementById('dictateBtn');
 const statusDiv = document.getElementById('status');
@@ -296,9 +456,40 @@ if (!SpeechRecognition) {
     recognition.continuous = true;
     recognition.interimResults = true;
     
+    // 识别模块接口
+    const recognitionModule = {
+        browser: {
+            start: startListening,
+            stop: stopListening
+        },
+        cloud: {
+            start: function() { alert('云端听写(预留)'); },
+            stop: function() {}
+        },
+        bluetooth: {
+            start: function() { alert('蓝牙识别(预留)'); },
+            stop: function() {}
+        },
+        camera: {
+            start: function() { alert('拍照识别(预留)'); },
+            stop: function() {}
+        }
+    };
+    
     dictateBtn.onclick = function() {
-        if (isListening) stopListening();
-        else startListening();
+        const currentMethod = modules.recognition.current;
+        const module = recognitionModule[currentMethod];
+        if (isListening && module.stop) {
+            module.stop();
+            isListening = false;
+            dictateBtn.textContent = '识别';
+            dictateBtn.className = 'btn btn-dictate';
+            statusDiv.textContent = '✅ 识别结束';
+            statusDiv.className = 'status success';
+            addBtn.disabled = false;
+        } else if (module.start) {
+            module.start();
+        }
     };
     
     recognition.onresult = function(event) {
@@ -396,10 +587,10 @@ function stopListening() {
 
 // 提取三个数字（按位置：第1个=高压，第2个=低压，第3个=心率）
 function extractThreeNumbers(text) {
-    // 先尝试按关键词提取
-    const highKeywords = ['高压', '收缩压'];
-    const lowKeywords = ['低压', '舒张压'];
-    const pulseKeywords = ['心率', '脉率', '脉搏', '心跳'];
+    // 使用可配置的关键词
+    const highKeywords = extractionConfig.highKeywords;
+    const lowKeywords = extractionConfig.lowKeywords;
+    const pulseKeywords = extractionConfig.pulseKeywords;
     
     let high = null, low = null, pulse = null;
     
@@ -712,12 +903,20 @@ function renderRecords() {
     }
     
     recordList.innerHTML = recordData.map((item, index) => {
-        const text = `${item.time}---${item.high}/${item.low}(${item.diff})-${item.pulse}🩺`;
+        // 使用可配置的格式化模板
+        const time = item.time.split(':');
+        let text = recordFormatConfig.template
+            .replace('HH', time[0])
+            .replace('MM', time[1])
+            .replace('high', item.high)
+            .replace('low', item.low)
+            .replace('diff', item.diff)
+            .replace('pulse', item.pulse);
         const sources = item.sources ? `（来源：${item.sources.map(s => `${s.high}/${s.low}/${s.pulse}`).join('、')}）` : '';
         return `<div class="record-item">
             <div>
                 <span>${text}</span>
-                <small style="color:#666;font-size:12px;display:block;margin-top:4px;">${sources}</small>
+                ${sources ? `<small style="color:#666;font-size:12px;display:block;margin-top:4px;">${sources}</small>` : ''}
             </div>
             <button class="btn btn-small btn-warning" onclick="copyRecord('${text}', ${index})">复制</button>
         </div>`;
