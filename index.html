@@ -213,7 +213,7 @@
 </head>
 <body>
 
-<div style="text-align:center;color:#999;font-size:12px;margin-bottom:8px;">v0.2-2603140052</div>
+<div style="text-align:center;color:#999;font-size:12px;margin-bottom:8px;">v0.2-2603140053</div>
 
 <!-- 原始记录 -->
 <div class="card">
@@ -650,7 +650,7 @@ function checkAndShowExtracted() {
     if (nums.high || nums.low || nums.pulse) {
         extractedPreview.style.display = 'block';
         
-        const methodText = nums.method === 'position' ? '预设的固定顺序为高压/低压/心率' : '（按关键词匹配）';
+        const methodText = nums.method === 'position' ? '程序预设了固定顺序，必须是高压 低压 心率' : '（按关键词匹配）';
         extractedPreview.innerHTML = `
             <strong>${methodText}</strong> 
             高压${nums.high || '-'} / 低压${nums.low || '-'} / 心率${nums.pulse || '-'}
