@@ -13,6 +13,12 @@
             margin: 0 auto;
             background: #f0f2f5;
             min-height: 100vh;
+            -webkit-user-select: none;
+            user-select: none;
+        }
+        textarea, .record-item {
+            -webkit-user-select: text;
+            user-select: text;
         }
         .card {
             background: white;
@@ -213,27 +219,27 @@
 </head>
 <body>
 
-<div style="text-align:center;color:#999;font-size:12px;margin-bottom:8px;">v0.2-2603140037</div>
+<div style="text-align:center;color:#999;font-size:12px;margin-bottom:8px;">v0.2-2603140038</div>
 
 <!-- 识别区 -->
 <div class="card">
     <h2>📝 识别区（输入区）</h2>
     <div id="status" class="status info">支持直接输入和<span id="currentMethod">前端听写</span></div>
     <div id="extractedPreview" class="extracted-preview" style="display:none;"></div>
-    <div class="recognition-area">
-        <textarea id="resultText" class="recognition-input" placeholder="可以手工输入血压数据，或点击右侧识别按钮..." oninput="checkAndShowExtracted()"></textarea>
+    <div class="recognition-area" style="position:relative;">
+        <textarea id="resultText" class="recognition-input" placeholder="可以手工输入血压数据，或点击右侧识别按钮..." oninput="checkAndShowExtracted()" style="padding-bottom:50px;"></textarea>
+        <!-- 框选提取区（在输入框内底部） -->
+        <div id="dragSelectArea" style="position:absolute; bottom:8px; left:8px; right:60px; padding:4px 8px; background:rgba(255,255,255,0.95); border-radius:4px; border:1px solid #eee;">
+            <div style="font-size:10px; color:#999; margin-bottom:2px;">点击框后再点击数字位置</div>
+            <div style="display:flex; gap:4px; align-items:center;">
+                <div class="drag-box" data-type="high" style="width:32px; height:22px; border:2px solid #9b59b6; border-radius:4px; display:flex; align-items:center; justify-content:center; font-size:11px; color:#9b59b6; cursor:pointer; background:white;">高压</div>
+                <div class="drag-box" data-type="low" style="width:26px; height:22px; border:2px solid #3498db; border-radius:4px; display:flex; align-items:center; justify-content:center; font-size:11px; color:#3498db; cursor:pointer; background:white;">低压</div>
+                <div class="drag-box" data-type="pulse" style="width:26px; height:22px; border:2px solid #27ae60; border-radius:4px; display:flex; align-items:center; justify-content:center; font-size:11px; color:#27ae60; cursor:pointer; background:white;">心率</div>
+            </div>
+        </div>
         <div class="transfer-section" style="gap: 10px;">
             <button id="dictateBtn" class="btn btn-dictate">识别</button>
             <button id="addBtn" class="btn btn-transfer" disabled>提取</button>
-        </div>
-    </div>
-    <!-- 框选提取区 -->
-    <div id="dragSelectArea" style="margin-top:8px; padding:8px; background:#fafafa; border-radius:8px;">
-        <div style="font-size:12px; color:#666; margin-bottom:6px;">如果提取错误请把三个框分别拖到相应数字上</div>
-        <div style="display:flex; gap:8px; align-items:center;">
-            <div class="drag-box" data-type="high" style="width:36px; height:28px; border:2px solid #9b59b6; border-radius:4px; display:flex; align-items:center; justify-content:center; font-size:12px; color:#9b59b6; cursor:move; background:white;">高压</div>
-            <div class="drag-box" data-type="low" style="width:28px; height:28px; border:2px solid #3498db; border-radius:4px; display:flex; align-items:center; justify-content:center; font-size:12px; color:#3498db; cursor:move; background:white;">低压</div>
-            <div class="drag-box" data-type="pulse" style="width:28px; height:28px; border:2px solid #27ae60; border-radius:4px; display:flex; align-items:center; justify-content:center; font-size:12px; color:#27ae60; cursor:move; background:white;">心率</div>
         </div>
     </div>
     <!-- 识别配置区 -->
@@ -415,58 +421,80 @@ const dragSelect = {
     pulse: null
 };
 
-// 初始化拖动框
+// 当前选中的框类型
+let activeDragBox = null;
+
+// 初始化点击选择框
 function initDragBoxes() {
     const dragBoxes = document.querySelectorAll('.drag-box');
+    
+    // 点击框选中
     dragBoxes.forEach(box => {
-        box.draggable = true;
-        box.addEventListener('dragstart', function(e) {
-            e.dataTransfer.setData('type', this.dataset.type);
-            this.style.opacity = '0.5';
-        });
-        box.addEventListener('dragend', function(e) {
-            this.style.opacity = '1';
+        box.addEventListener('click', function(e) {
+            e.stopPropagation();
+            // 取消其他框的选中状态
+            dragBoxes.forEach(b => b.style.background = 'white');
+            // 选中当前框
+            this.style.background = '#fffde7';
+            activeDragBox = this.dataset.type;
         });
     });
     
-    // 文本框接收拖放
-    resultText.addEventListener('dragover', function(e) {
-        e.preventDefault();
-    });
-    resultText.addEventListener('drop', function(e) {
-        e.preventDefault();
-        const type = e.dataTransfer.getData('type');
+    // 点击输入框放置框
+    resultText.addEventListener('click', function(e) {
+        if (!activeDragBox) return;
+        
         const text = resultText.value;
         const allNumbers = text.match(/\d{2,3}/g) || [];
         
-        // 计算鼠标位置对应的数字
+        if (allNumbers.length === 0) {
+            // 没有数字，框选失败
+            resetActiveBox();
+            return;
+        }
+        
+        // 计算点击位置对应的数字
         const rect = resultText.getBoundingClientRect();
         const x = e.clientX - rect.left;
+        const y = e.clientY - rect.top;
+        const lineHeight = parseInt(getComputedStyle(resultText).lineHeight) || 20;
+        const line = Math.floor(y / lineHeight);
         const charWidth = rect.width / resultText.cols;
-        const charIndex = Math.floor(x / charWidth);
+        const charIndex = Math.floor(x / charWidth) + line * resultText.cols;
         
         // 找到最接近的数字
         let closestNum = null;
         let minDist = Infinity;
-        let currentIndex = 0;
+        let searchIndex = 0;
         for (let num of allNumbers) {
-            const numIndex = text.indexOf(num, currentIndex);
+            const numIndex = text.indexOf(num, searchIndex);
             if (numIndex >= 0) {
                 const dist = Math.abs(numIndex - charIndex);
                 if (dist < minDist) {
                     minDist = dist;
                     closestNum = parseInt(num);
                 }
-                currentIndex = numIndex + num.length;
+                searchIndex = numIndex + num.length;
             }
         }
         
-        if (closestNum) {
-            dragSelect[type] = closestNum;
-            updateDragBoxDisplay(type, closestNum);
+        if (closestNum && minDist < 10) {
+            dragSelect[activeDragBox] = closestNum;
+            updateDragBoxDisplay(activeDragBox, closestNum);
             updateExtractButton();
         }
+        
+        resetActiveBox();
     });
+}
+
+// 重置选中状态
+function resetActiveBox() {
+    if (activeDragBox) {
+        const box = document.querySelector(`.drag-box[data-type="${activeDragBox}"]`);
+        if (box) box.style.background = 'white';
+    }
+    activeDragBox = null;
 }
 
 // 更新框显示
@@ -476,6 +504,7 @@ function updateDragBoxDisplay(type, value) {
         box.textContent = value;
         box.style.width = 'auto';
         box.style.padding = '0 4px';
+        box.style.minWidth = '26px';
     }
 }
 
@@ -497,9 +526,12 @@ function resetDragSelect() {
     document.querySelector('.drag-box[data-type="low"]').textContent = '低压';
     document.querySelector('.drag-box[data-type="pulse"]').textContent = '心率';
     
-    document.querySelector('.drag-box[data-type="high"]').style.width = '36px';
-    document.querySelector('.drag-box[data-type="low"]').style.width = '28px';
-    document.querySelector('.drag-box[data-type="pulse"]').style.width = '28px';
+    document.querySelector('.drag-box[data-type="high"]').style.width = '32px';
+    document.querySelector('.drag-box[data-type="low"]').style.width = '26px';
+    document.querySelector('.drag-box[data-type="pulse"]').style.width = '26px';
+    
+    document.querySelectorAll('.drag-box').forEach(b => b.style.background = 'white');
+    activeDragBox = null;
 }
 
 // 页面加载后初始化
