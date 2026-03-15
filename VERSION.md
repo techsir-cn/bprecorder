@@ -1,6 +1,6 @@
 # BPRecorder 版本管理
 
-## 当前版本: v0.3-2603150062
+## 当前版本: v0.3-2603150063
 
 ## 版本历史
 - v0.1-2603120001: 初始版本
@@ -34,11 +34,11 @@
 - v0.3-2603150060: 修复OCR识别：改用createWorker API，修复图片读取错误
 - v0.3-2603150061: 修复OCR：改用base64传递图片，解决blob URL读取问题
 - v0.3-2603150062: 去掉Tesseract.js，改用后端Tesseract OCR（bpserver新增/ocr接口）
+- v0.3-2603150063: **⭐ OCR方案最终版** - 改用百度OCR API，识别效果良好，支持HEIC自动转换
 
 ## 已知问题
 - iPad Safari Web Speech API bug（Apple已知问题），需用系统快捷键
 - Apple API 识别机器声效果差，建议口播
-- Tesseract对数码管字体识别效果差，待改用PaddleOCR（需AVX2 CPU）
 
 ## 规范
 1. 每次改动前备份
