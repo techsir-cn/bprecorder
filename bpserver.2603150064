@@ -173,9 +173,7 @@ def ocr_image(image_data):
         import io
         
         if image_data.startswith("data:image"):
-            header, image_data = image_data.split(",", 1)
-            if "heic" in header.lower() or "heif" in header.lower():
-                pass
+            image_data = image_data.split(",", 1)[1]
         
         try:
             img_bytes = base64.b64decode(image_data)
@@ -185,29 +183,7 @@ def ocr_image(image_data):
         try:
             img = Image.open(io.BytesIO(img_bytes))
         except Exception as e:
-            error_msg = str(e).lower()
-            if "heic" in error_msg or "heif" in error_msg or "cannot identify" in error_msg:
-                with tempfile.NamedTemporaryFile(suffix=".heic", delete=False) as tmp_in:
-                    tmp_in.write(img_bytes)
-                    tmp_in_path = tmp_in.name
-                
-                tmp_out_path = tmp_in_path.replace(".heic", ".png")
-                
-                try:
-                    subprocess.run(["heif-convert", tmp_in_path, tmp_out_path], 
-                                   capture_output=True, timeout=30, check=True)
-                    img = Image.open(tmp_out_path)
-                except subprocess.CalledProcessError as conv_err:
-                    return {"success": False, "error": f"HEIC转换失败: {conv_err.stderr.decode() if conv_err.stderr else str(conv_err)}"}
-                except FileNotFoundError:
-                    return {"success": False, "error": "HEIC格式不支持，请上传PNG或JPG格式"}
-                finally:
-                    if os.path.exists(tmp_in_path):
-                        os.unlink(tmp_in_path)
-                    if os.path.exists(tmp_out_path):
-                        os.unlink(tmp_out_path)
-            else:
-                return {"success": False, "error": f"图片加载失败: {e}"}
+            return {"success": False, "error": f"图片加载失败: {e}"}
         
         if img.width > 1000:
             ratio = 1000 / img.width
