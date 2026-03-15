@@ -212,7 +212,7 @@
 </head>
 <body>
 
-<div style="text-align:center;color:#999;font-size:12px;margin-bottom:8px;">v0.3-2603160067</div>
+<div style="text-align:center;color:#999;font-size:12px;margin-bottom:8px;">v0.3-2603160070</div>
 
 <!-- 测量数据 -->
 <div class="card">
@@ -487,6 +487,8 @@ document.addEventListener('DOMContentLoaded', function() {
 });
 
 // 初始化
+const savedMethod = localStorage.getItem('recognitionCurrent') || 'dictate';
+document.querySelector(`input[name="recognitionMethod"][value="${savedMethod}"]`).checked = true;
 updateCurrentMethod();
 
 const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
