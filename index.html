@@ -213,7 +213,7 @@
 </head>
 <body>
 
-<div style="text-align:center;color:#999;font-size:12px;margin-bottom:8px;">v0.3-2603150060</div>
+<div style="text-align:center;color:#999;font-size:12px;margin-bottom:8px;">v0.3-2603150061</div>
 
 <!-- 测量数据 -->
 <div class="card">
@@ -401,41 +401,45 @@ async function handleModelConfigImage(event) {
     const file = event.target.files[0];
     if (!file) return;
     
-    const imgUrl = URL.createObjectURL(file);
-    document.getElementById('modelConfigImagePreview').innerHTML = '<img src="' + imgUrl + '" style="max-width:100%; max-height:200px; border-radius:8px;">';
-    document.getElementById('ocrPreview').innerHTML = '<div style="color:#666;">正在加载OCR引擎...</div>';
-    
-    try {
-        const worker = await Tesseract.createWorker('eng', 1, {
-            logger: m => {
-                if (m.status === 'loading tesseract core') {
-                    document.getElementById('ocrPreview').innerHTML = '<div style="color:#666;">加载OCR核心...</div>';
-                } else if (m.status === 'initializing tesseract') {
-                    document.getElementById('ocrPreview').innerHTML = '<div style="color:#666;">初始化OCR...</div>';
-                } else if (m.status === 'loading language traineddata') {
-                    document.getElementById('ocrPreview').innerHTML = '<div style="color:#666;">加载语言包...</div>';
-                } else if (m.status === 'initializing api') {
-                    document.getElementById('ocrPreview').innerHTML = '<div style="color:#666;">准备识别...</div>';
-                } else if (m.status === 'recognizing text') {
-                    document.getElementById('ocrPreview').innerHTML = '<div style="color:#666;">识别中...</div>';
+    const reader = new FileReader();
+    reader.onload = async function(e) {
+        const base64 = e.target.result;
+        document.getElementById('modelConfigImagePreview').innerHTML = '<img src="' + base64 + '" style="max-width:100%; max-height:200px; border-radius:8px;">';
+        document.getElementById('ocrPreview').innerHTML = '<div style="color:#666;">正在加载OCR引擎...</div>';
+        
+        try {
+            const worker = await Tesseract.createWorker('eng', 1, {
+                logger: m => {
+                    if (m.status === 'loading tesseract core') {
+                        document.getElementById('ocrPreview').innerHTML = '<div style="color:#666;">加载OCR核心...</div>';
+                    } else if (m.status === 'initializing tesseract') {
+                        document.getElementById('ocrPreview').innerHTML = '<div style="color:#666;">初始化OCR...</div>';
+                    } else if (m.status === 'loading language traineddata') {
+                        document.getElementById('ocrPreview').innerHTML = '<div style="color:#666;">加载语言包...</div>';
+                    } else if (m.status === 'initializing api') {
+                        document.getElementById('ocrPreview').innerHTML = '<div style="color:#666;">准备识别...</div>';
+                    } else if (m.status === 'recognizing text') {
+                        document.getElementById('ocrPreview').innerHTML = '<div style="color:#666;">识别中...</div>';
+                    }
                 }
+            });
+            
+            const result = await worker.recognize(base64);
+            await worker.terminate();
+            
+            const numbers = result.data.text.match(/\d{2,3}/g) || [];
+            ocrNumbers = numbers.slice(0, 3);
+            ocrMapping = [null, null, null];
+            if (ocrNumbers.length < 3) {
+                document.getElementById('ocrPreview').innerHTML = '<div style="color:#e74c3c;">识别到' + ocrNumbers.length + '个数字，需要3个。原始文本: ' + result.data.text.trim() + '</div>';
+            } else {
+                renderOcrPreview();
             }
-        });
-        
-        const result = await worker.recognize(imgUrl);
-        await worker.terminate();
-        
-        const numbers = result.data.text.match(/\d{2,3}/g) || [];
-        ocrNumbers = numbers.slice(0, 3);
-        ocrMapping = [null, null, null];
-        if (ocrNumbers.length < 3) {
-            document.getElementById('ocrPreview').innerHTML = '<div style="color:#e74c3c;">识别到' + ocrNumbers.length + '个数字，需要3个。原始文本: ' + result.data.text.trim() + '</div>';
-        } else {
-            renderOcrPreview();
+        } catch (err) {
+            document.getElementById('ocrPreview').innerHTML = '<div style="color:#e74c3c;">识别失败: ' + (err.message || err.toString()) + '</div>';
         }
-    } catch (e) {
-        document.getElementById('ocrPreview').innerHTML = '<div style="color:#e74c3c;">识别失败: ' + (e.message || JSON.stringify(e) || '未知错误') + '</div>';
-    }
+    };
+    reader.readAsDataURL(file);
 }
 
 function renderOcrPreview() {
@@ -538,38 +542,42 @@ async function handleImageUpload(event) {
     const file = event.target.files[0];
     if (!file) return;
     
-    const imgUrl = URL.createObjectURL(file);
-    document.getElementById('cameraImagePreview').innerHTML = '<img src="' + imgUrl + '" style="max-width:100%; max-height:200px; border-radius:8px;">';
-    document.getElementById('cameraStatus').textContent = '加载OCR引擎...';
-    
-    try {
-        const worker = await Tesseract.createWorker('eng', 1, {
-            logger: m => {
-                if (m.status === 'recognizing text') {
-                    document.getElementById('cameraStatus').textContent = '识别中...';
+    const reader = new FileReader();
+    reader.onload = async function(e) {
+        const base64 = e.target.result;
+        document.getElementById('cameraImagePreview').innerHTML = '<img src="' + base64 + '" style="max-width:100%; max-height:200px; border-radius:8px;">';
+        document.getElementById('cameraStatus').textContent = '加载OCR引擎...';
+        
+        try {
+            const worker = await Tesseract.createWorker('eng', 1, {
+                logger: m => {
+                    if (m.status === 'recognizing text') {
+                        document.getElementById('cameraStatus').textContent = '识别中...';
+                    }
                 }
+            });
+            
+            const result = await worker.recognize(base64);
+            await worker.terminate();
+            
+            const numbers = result.data.text.match(/\d{2,3}/g) || [];
+            
+            if (numbers.length < 3) {
+                document.getElementById('cameraStatus').innerHTML = '<span style="color:#e74c3c;">识别到' + numbers.length + '个数字，需要3个。原始: ' + result.data.text.trim() + '</span>';
+                return;
             }
-        });
-        
-        const result = await worker.recognize(imgUrl);
-        await worker.terminate();
-        
-        const numbers = result.data.text.match(/\d{2,3}/g) || [];
-        
-        if (numbers.length < 3) {
-            document.getElementById('cameraStatus').innerHTML = '<span style="color:#e74c3c;">识别到' + numbers.length + '个数字，需要3个。原始: ' + result.data.text.trim() + '</span>';
-            return;
+            
+            resultText.value = numbers.slice(0, 3).join(' ');
+            document.getElementById('cameraStatus').innerHTML = '<span style="color:#27ae60;">识别完成: ' + numbers.slice(0, 3).join(' / ') + '</span>';
+            setTimeout(() => {
+                closeCameraModal();
+                checkAndShowExtracted();
+            }, 1000);
+        } catch (err) {
+            document.getElementById('cameraStatus').innerHTML = '<span style="color:#e74c3c;">识别失败: ' + (err.message || err.toString()) + '</span>';
         }
-        
-        resultText.value = numbers.slice(0, 3).join(' ');
-        document.getElementById('cameraStatus').innerHTML = '<span style="color:#27ae60;">识别完成: ' + numbers.slice(0, 3).join(' / ') + '</span>';
-        setTimeout(() => {
-            closeCameraModal();
-            checkAndShowExtracted();
-        }, 1000);
-    } catch (e) {
-        document.getElementById('cameraStatus').innerHTML = '<span style="color:#e74c3c;">识别失败: ' + (e.message || JSON.stringify(e) || '未知错误') + '</span>';
-    }
+    };
+    reader.readAsDataURL(file);
 }
 
 // 长按检测 - 使用统一的处理方式
