@@ -212,12 +212,12 @@
 </head>
 <body>
 
-<div style="text-align:center;color:#999;font-size:12px;margin-bottom:8px;">v0.3-2603160070</div>
+<div style="text-align:center;color:#999;font-size:12px;margin-bottom:8px;">v0.3-2603160071</div>
 
 <!-- 测量数据 -->
 <div class="card">
     <h2>📝 测量数据</h2>
-    <div id="status" class="status info">支持直接输入和<span id="currentMethod">人声识别</span></div>
+    <div id="status" class="status info">可直接输入，也可人声识别，长按识别按钮可切换为AI图片识别</div>
     <div id="extractedPreview" class="extracted-preview" style="display:none;"></div>
     <div class="recognition-area">
         <textarea id="resultText" class="recognition-input" placeholder="可以手工按顺序输入高压/低压/心率数字，不同数字间要用空格或符号隔开，不能紧挨，也可以点击识别按钮，长按识别可以配置识别方式" oninput="checkAndShowExtracted()"></textarea>
@@ -304,8 +304,10 @@ const config = {
 };
 
 function updateCurrentMethod() {
-    const method = config.recognition.methods[config.recognition.current];
-    document.getElementById('currentMethod').textContent = method.name;
+    const current = config.recognition.current;
+    const currentName = config.recognition.methods[current].name;
+    const otherName = current === 'dictate' ? config.recognition.methods['camera'].name : config.recognition.methods['dictate'].name;
+    document.getElementById('status').textContent = `可直接输入，也可${currentName}，长按识别按钮可切换为${otherName}`;
 }
 
 function saveRecognitionConfig() {
