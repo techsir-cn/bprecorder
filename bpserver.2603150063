@@ -175,15 +175,8 @@ def ocr_image(image_data):
         if image_data.startswith("data:image"):
             image_data = image_data.split(",", 1)[1]
         
-        try:
-            img_bytes = base64.b64decode(image_data)
-        except Exception as e:
-            return {"success": False, "error": f"base64解码失败: {e}"}
-        
-        try:
-            img = Image.open(io.BytesIO(img_bytes))
-        except Exception as e:
-            return {"success": False, "error": f"图片加载失败: {e}"}
+        img_bytes = base64.b64decode(image_data)
+        img = Image.open(io.BytesIO(img_bytes))
         
         if img.width > 1000:
             ratio = 1000 / img.width
@@ -219,8 +212,7 @@ def ocr_image(image_data):
         }
         
     except Exception as e:
-        import traceback
-        return {"success": False, "error": f"{str(e)}", "traceback": traceback.format_exc()}
+        return {"success": False, "error": str(e)}
 
 
 # ========== HTTPS证书生成 ==========
