@@ -24,8 +24,9 @@ BAILIAN_BASE_URL = "https://dashscope.aliyuncs.com/compatible-mode/v1/chat/compl
 BAILIAN_MODEL = "qwen3-vl-235b-a22b-thinking"
 
 WORKSPACE = Path(__file__).parent.resolve()
-RECORDS_DIR = None
-RECORDINGS_DIR = None
+RECORDS_DIR = WORKSPACE / "records"
+RECORDINGS_DIR = WORKSPACE / "recordings"
+RECORDINGS_DIR.mkdir(exist_ok=True)
 
 rec_state = {"log": [], "pending": []}
 
@@ -192,13 +193,6 @@ def ocr_image(image_data):
             ratio = 1000 / img.width
             img = img.resize((1000, int(img.height * ratio)))
         
-        # 图片预处理：增强对比度和亮度
-        if img.mode != 'RGB':
-            img = img.convert('RGB')
-        from PIL import ImageEnhance
-        img = ImageEnhance.Contrast(img).enhance(1.5)
-        img = ImageEnhance.Brightness(img).enhance(1.2)
-        
         buffer = io.BytesIO()
         img.save(buffer, format="PNG", optimize=True)
         img_data = base64.b64encode(buffer.getvalue()).decode()
@@ -209,7 +203,7 @@ def ocr_image(image_data):
                 "role": "user",
                 "content": [
                     {"type": "image_url", "image_url": {"url": f"data:image/png;base64,{img_data}"}},
-                    {"type": "text", "text": "识别血压计屏幕数字，按顺序返回：高压 低压 心率"}
+                    {"type": "text", "text": "请识别图片中血压计屏幕上的数字，只返回三个数字：高压 低压 脉率，格式如：高压104 低压73 脉率72"}
                 ]
             }]
         }
@@ -499,13 +493,6 @@ def main():
     if args.port:
         port = args.port
 
-    # 按端口自动创建数据目录
-    global RECORDS_DIR, RECORDINGS_DIR
-    datadir = WORKSPACE / f".{port}"
-    RECORDS_DIR = datadir / "records"
-    RECORDINGS_DIR = datadir / "recordings"
-    RECORDINGS_DIR.mkdir(parents=True, exist_ok=True)
-
     # 创建服务器
     server = HTTPServer((host, port), Handler)
 
@@ -528,7 +515,7 @@ def main():
     print("🩺 BPRecorder Server")
     print("=" * 50)
     print(f"📡 监听: {protocol.lower()}://{host}:{port}")
-    print(f"📁 数据目录: {datadir}")
+    print(f"📁 工作目录: {WORKSPACE}")
     if protocol == "HTTPS":
         print("⚠️  首次访问会提示'不安全'，点击'继续访问'即可")
     print("=" * 50)
