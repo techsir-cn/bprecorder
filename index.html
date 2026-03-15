@@ -4,7 +4,6 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>血压记录</title>
-    <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
     <style>
         * { box-sizing: border-box; margin: 0; padding: 0; }
         body {
@@ -213,7 +212,7 @@
 </head>
 <body>
 
-<div style="text-align:center;color:#999;font-size:12px;margin-bottom:8px;">v0.3-2603150061</div>
+<div style="text-align:center;color:#999;font-size:12px;margin-bottom:8px;">v0.3-2603150062</div>
 
 <!-- 测量数据 -->
 <div class="card">
@@ -405,38 +404,31 @@ async function handleModelConfigImage(event) {
     reader.onload = async function(e) {
         const base64 = e.target.result;
         document.getElementById('modelConfigImagePreview').innerHTML = '<img src="' + base64 + '" style="max-width:100%; max-height:200px; border-radius:8px;">';
-        document.getElementById('ocrPreview').innerHTML = '<div style="color:#666;">正在加载OCR引擎...</div>';
+        document.getElementById('ocrPreview').innerHTML = '<div style="color:#666;">识别中...</div>';
         
         try {
-            const worker = await Tesseract.createWorker('eng', 1, {
-                logger: m => {
-                    if (m.status === 'loading tesseract core') {
-                        document.getElementById('ocrPreview').innerHTML = '<div style="color:#666;">加载OCR核心...</div>';
-                    } else if (m.status === 'initializing tesseract') {
-                        document.getElementById('ocrPreview').innerHTML = '<div style="color:#666;">初始化OCR...</div>';
-                    } else if (m.status === 'loading language traineddata') {
-                        document.getElementById('ocrPreview').innerHTML = '<div style="color:#666;">加载语言包...</div>';
-                    } else if (m.status === 'initializing api') {
-                        document.getElementById('ocrPreview').innerHTML = '<div style="color:#666;">准备识别...</div>';
-                    } else if (m.status === 'recognizing text') {
-                        document.getElementById('ocrPreview').innerHTML = '<div style="color:#666;">识别中...</div>';
-                    }
-                }
+            const response = await fetch('/ocr', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ image: base64 })
             });
+            const result = await response.json();
             
-            const result = await worker.recognize(base64);
-            await worker.terminate();
+            if (!result.success) {
+                document.getElementById('ocrPreview').innerHTML = '<div style="color:#e74c3c;">识别失败: ' + result.error + '</div>';
+                return;
+            }
             
-            const numbers = result.data.text.match(/\d{2,3}/g) || [];
+            const numbers = result.numbers || [];
             ocrNumbers = numbers.slice(0, 3);
             ocrMapping = [null, null, null];
             if (ocrNumbers.length < 3) {
-                document.getElementById('ocrPreview').innerHTML = '<div style="color:#e74c3c;">识别到' + ocrNumbers.length + '个数字，需要3个。原始文本: ' + result.data.text.trim() + '</div>';
+                document.getElementById('ocrPreview').innerHTML = '<div style="color:#e74c3c;">识别到' + ocrNumbers.length + '个数字，需要3个。原始文本: ' + result.text + '</div>';
             } else {
                 renderOcrPreview();
             }
         } catch (err) {
-            document.getElementById('ocrPreview').innerHTML = '<div style="color:#e74c3c;">识别失败: ' + (err.message || err.toString()) + '</div>';
+            document.getElementById('ocrPreview').innerHTML = '<div style="color:#e74c3c;">识别失败: ' + err.message + '</div>';
         }
     };
     reader.readAsDataURL(file);
@@ -546,24 +538,25 @@ async function handleImageUpload(event) {
     reader.onload = async function(e) {
         const base64 = e.target.result;
         document.getElementById('cameraImagePreview').innerHTML = '<img src="' + base64 + '" style="max-width:100%; max-height:200px; border-radius:8px;">';
-        document.getElementById('cameraStatus').textContent = '加载OCR引擎...';
+        document.getElementById('cameraStatus').textContent = '识别中...';
         
         try {
-            const worker = await Tesseract.createWorker('eng', 1, {
-                logger: m => {
-                    if (m.status === 'recognizing text') {
-                        document.getElementById('cameraStatus').textContent = '识别中...';
-                    }
-                }
+            const response = await fetch('/ocr', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ image: base64 })
             });
+            const result = await response.json();
             
-            const result = await worker.recognize(base64);
-            await worker.terminate();
+            if (!result.success) {
+                document.getElementById('cameraStatus').innerHTML = '<span style="color:#e74c3c;">识别失败: ' + result.error + '</span>';
+                return;
+            }
             
-            const numbers = result.data.text.match(/\d{2,3}/g) || [];
+            const numbers = result.numbers || [];
             
             if (numbers.length < 3) {
-                document.getElementById('cameraStatus').innerHTML = '<span style="color:#e74c3c;">识别到' + numbers.length + '个数字，需要3个。原始: ' + result.data.text.trim() + '</span>';
+                document.getElementById('cameraStatus').innerHTML = '<span style="color:#e74c3c;">识别到' + numbers.length + '个数字，需要3个。原始: ' + result.text + '</span>';
                 return;
             }
             
@@ -574,7 +567,7 @@ async function handleImageUpload(event) {
                 checkAndShowExtracted();
             }, 1000);
         } catch (err) {
-            document.getElementById('cameraStatus').innerHTML = '<span style="color:#e74c3c;">识别失败: ' + (err.message || err.toString()) + '</span>';
+            document.getElementById('cameraStatus').innerHTML = '<span style="color:#e74c3c;">识别失败: ' + err.message + '</span>';
         }
     };
     reader.readAsDataURL(file);

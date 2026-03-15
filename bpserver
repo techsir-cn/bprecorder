@@ -5,12 +5,14 @@ BPRecorder Server - 血压记录后端服务
 """
 
 import argparse
+import base64
 import json
 import os
 import re
 import ssl
 import subprocess
 import sys
+import tempfile
 from datetime import datetime
 from http.server import HTTPServer, SimpleHTTPRequestHandler
 from pathlib import Path
@@ -140,6 +142,41 @@ def extract_bp_data(text):
     return {"success": False, "error": "未能提取血压数据", "text": original_text}
 
 
+def ocr_image(image_data):
+    """使用tesseract识别图片中的数字"""
+    try:
+        if image_data.startswith("data:image"):
+            image_data = image_data.split(",", 1)[1]
+        
+        img_bytes = base64.b64decode(image_data)
+        
+        with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as f:
+            f.write(img_bytes)
+            temp_path = f.name
+        
+        try:
+            result = subprocess.run(
+                ["tesseract", temp_path, "stdout", "-l", "eng", "--psm", "6"],
+                capture_output=True,
+                text=True,
+                timeout=30
+            )
+            
+            text = result.stdout.strip()
+            numbers = re.findall(r"\d{2,3}", text)
+            
+            return {
+                "success": True,
+                "text": text,
+                "numbers": numbers[:3] if len(numbers) >= 3 else numbers
+            }
+        finally:
+            os.unlink(temp_path)
+            
+    except Exception as e:
+        return {"success": False, "error": str(e)}
+
+
 # ========== HTTPS证书生成 ==========
 
 def create_self_signed_cert():
@@ -217,7 +254,25 @@ class Handler(SimpleHTTPRequestHandler):
             self.end_headers()
 
     def do_POST(self):
-        if self.path == "/normalize":
+        if self.path == "/ocr":
+            content_length = int(self.headers.get("Content-Length", 0))
+            body = self.rfile.read(content_length)
+            try:
+                req = json.loads(body)
+                image_data = req.get("image", "")
+                result = ocr_image(image_data)
+                self.send_response(200)
+                self.send_header("Content-type", "application/json")
+                self.send_header("Access-Control-Allow-Origin", "*")
+                self.end_headers()
+                self.wfile.write(json.dumps(result, ensure_ascii=False).encode("utf-8"))
+            except Exception as e:
+                self.send_response(500)
+                self.send_header("Content-type", "application/json")
+                self.end_headers()
+                self.wfile.write(json.dumps({"success": False, "error": str(e)}).encode("utf-8"))
+
+        elif self.path == "/normalize":
             content_length = int(self.headers.get("Content-Length", 0))
             body = self.rfile.read(content_length)
             try:
