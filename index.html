@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>血压记录</title>
+    <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
     <style>
         * { box-sizing: border-box; margin: 0; padding: 0; }
         body {
@@ -212,12 +213,12 @@
 </head>
 <body>
 
-<div style="text-align:center;color:#999;font-size:12px;margin-bottom:8px;">v0.2-2603140056</div>
+<div style="text-align:center;color:#999;font-size:12px;margin-bottom:8px;">v0.2-2603140057</div>
 
 <!-- 测量数据 -->
 <div class="card">
     <h2>📝 测量数据</h2>
-    <div id="status" class="status info">支持直接输入和<span id="currentMethod">前端听写</span></div>
+    <div id="status" class="status info">支持直接输入和<span id="currentMethod">听写</span></div>
     <div id="extractedPreview" class="extracted-preview" style="display:none;"></div>
     <div class="recognition-area">
         <textarea id="resultText" class="recognition-input" placeholder="可以手工按顺序输入高压/低压/心率数字，不同数字间要用空格或符号隔开，不能紧挨，也可以点击识别按钮，长按识别可以配置识别方式" oninput="checkAndShowExtracted()"></textarea>
@@ -228,28 +229,47 @@
     </div>
     <!-- 识别配置区 -->
     <div id="recognitionConfig" style="display:none; margin-top:12px; padding:12px; background:#f5f5f5; border-radius:8px;">
-        <div style="font-weight:bold; margin-bottom:8px;">识别方式配置 <span style="font-weight:normal;color:#999;font-size:12px;">（选择后自动保存）</span></div>
-        <label style="display:block; margin:8px 0;"><input type="radio" name="recognitionMethod" value="browser" checked onchange="saveRecognitionConfig(); document.getElementById('recognitionConfig').style.display='none'"> 前端听写</label>
-        <label style="display:block; margin:8px 0; color:#999;"><input type="radio" name="recognitionMethod" value="cloud" disabled> 云端听写(预留)</label>
-        <label style="display:block; margin:8px 0; color:#999;"><input type="radio" name="recognitionMethod" value="bluetooth" disabled> 蓝牙识别(预留)</label>
-        <label style="display:block; margin:8px 0; color:#999;"><input type="radio" name="recognitionMethod" value="camera" disabled> 拍照识别(预留)</label>
+        <div style="font-weight:bold; margin-bottom:8px;">识别方式 <span style="font-weight:normal;color:#999;font-size:12px;">（选择后自动保存）</span></div>
+        <label style="display:block; margin:8px 0;"><input type="radio" name="recognitionMethod" value="dictate" checked onchange="saveRecognitionConfig()"> 听写</label>
+        <label style="display:block; margin:8px 0;"><input type="radio" name="recognitionMethod" value="camera" onchange="saveRecognitionConfig()"> 拍照</label>
+        <div style="margin-top:12px; padding-top:8px; border-top:1px solid #ddd;">
+            <div style="font-weight:bold; margin-bottom:8px;">拍照型号管理</div>
+            <div id="modelList" style="margin-bottom:8px;"></div>
+            <button class="btn btn-small" style="background:#3498db; color:white; width:100%;" onclick="openModelConfig()">新增型号</button>
+        </div>
         <button class="btn btn-small" style="margin-top:8px; width:100%; background:#ccc;" onclick="document.getElementById('recognitionConfig').style.display='none'">关闭</button>
+    </div>
+    <!-- 型号配置弹窗 -->
+    <div id="modelConfigModal" style="display:none; position:fixed; top:0; left:0; right:0; bottom:0; background:rgba(0,0,0,0.5); z-index:1000; padding:16px;">
+        <div style="background:white; border-radius:12px; padding:16px; max-width:400px; margin:50px auto;">
+            <div style="font-weight:bold; margin-bottom:12px;">配置型号</div>
+            <div id="ocrPreview" style="margin-bottom:12px;"></div>
+            <div style="margin-bottom:8px;">
+                <input type="text" id="modelNameInput" placeholder="输入型号名称" style="width:100%; padding:8px; border:1px solid #ddd; border-radius:4px;">
+            </div>
+            <div style="display:flex; gap:8px;">
+                <button class="btn btn-small" style="flex:1; background:#ccc;" onclick="closeModelConfig()">取消</button>
+                <button class="btn btn-small" style="flex:1; background:#27ae60; color:white;" onclick="saveModelConfig()">保存</button>
+            </div>
+        </div>
+    </div>
+    <!-- 拍照弹窗 -->
+    <div id="cameraModal" style="display:none; position:fixed; top:0; left:0; right:0; bottom:0; background:rgba(0,0,0,0.5); z-index:1000; padding:16px;">
+        <div style="background:white; border-radius:12px; padding:16px; max-width:400px; margin:50px auto;">
+            <div style="font-weight:bold; margin-bottom:12px;">拍照识别</div>
+            <div id="modelSelector" style="margin-bottom:12px;"></div>
+            <input type="file" id="cameraInput" accept="image/*" capture="environment" style="display:none;" onchange="handleImageUpload(event)">
+            <button class="btn" style="width:100%; background:#3498db; color:white; margin-bottom:8px;" onclick="document.getElementById('cameraInput').click()">拍照/选择图片</button>
+            <div id="cameraStatus" style="margin-bottom:8px; font-size:14px; color:#666;"></div>
+            <button class="btn btn-small" style="width:100%; background:#ccc;" onclick="closeCameraModal()">关闭</button>
+        </div>
     </div>
     <!-- 提取配置区 -->
     <div id="extractionConfig" style="display:none; margin-top:12px; padding:12px; background:#f5f5f5; border-radius:8px;">
-        <div style="font-weight:bold; margin-bottom:8px;">提取方式配置 <span style="font-weight:normal;color:#999;font-size:12px;">（失焦自动保存）</span></div>
-        <label style="display:block; margin:8px 0;"><input type="radio" name="extractionMethod" value="regex" checked onchange="toggleExtractionConfig()"> 正则</label>
-        <label style="display:block; margin:8px 0; color:#999;"><input type="radio" name="extractionMethod" value="model" disabled onchange="toggleExtractionConfig()"> 模型(预留)</label>
-        <div id="regexConfig" style="margin-top:8px;">
-            <input type="text" id="regexHigh" value="高压|收缩压" style="width:100%; padding:8px; border:1px solid #ddd; border-radius:4px; margin-bottom:4px;" placeholder="高压关键词" onblur="saveExtractionConfig()">
-            <input type="text" id="regexLow" value="低压|舒张压" style="width:100%; padding:8px; border:1px solid #ddd; border-radius:4px; margin-bottom:4px;" placeholder="低压关键词" onblur="saveExtractionConfig()">
-            <input type="text" id="regexPulse" value="心率|脉率|脉搏|心跳" style="width:100%; padding:8px; border:1px solid #ddd; border-radius:4px;" placeholder="心率关键词" onblur="saveExtractionConfig()">
-        </div>
-        <div id="modelConfig" style="display:none; margin-top:8px;">
-            <input type="text" id="modelUrl" style="width:100%; padding:8px; border:1px solid #ddd; border-radius:4px; margin-bottom:4px;" placeholder="模型URL" onblur="saveExtractionConfig()">
-            <input type="text" id="modelToken" style="width:100%; padding:8px; border:1px solid #ddd; border-radius:4px; margin-bottom:4px;" placeholder="Token(可选)" onblur="saveExtractionConfig()">
-            <textarea id="modelPrompt" style="width:100%; padding:8px; border:1px solid #ddd; border-radius:4px; min-height:60px;" placeholder="提示词" onblur="saveExtractionConfig()"></textarea>
-        </div>
+        <div style="font-weight:bold; margin-bottom:8px;">关键词前缀 <span style="font-weight:normal;color:#999;font-size:12px;">（失焦自动保存）</span></div>
+        <input type="text" id="regexHigh" value="高压|收缩压" style="width:100%; padding:8px; border:1px solid #ddd; border-radius:4px; margin-bottom:4px;" placeholder="高压关键词" onblur="saveExtractionConfig()">
+        <input type="text" id="regexLow" value="低压|舒张压" style="width:100%; padding:8px; border:1px solid #ddd; border-radius:4px; margin-bottom:4px;" placeholder="低压关键词" onblur="saveExtractionConfig()">
+        <input type="text" id="regexPulse" value="心率|脉率|脉搏|心跳" style="width:100%; padding:8px; border:1px solid #ddd; border-radius:4px;" placeholder="心率关键词" onblur="saveExtractionConfig()">
         <button class="btn btn-small" style="margin-top:8px; width:100%; background:#ccc;" onclick="document.getElementById('extractionConfig').style.display='none'">关闭</button>
     </div>
 </div>
@@ -284,39 +304,30 @@
 // ========== 配置模块 ==========
 const config = {
     recognition: {
-        current: localStorage.getItem('recognitionCurrent') || 'browser',
+        current: localStorage.getItem('recognitionCurrent') || 'dictate',
         methods: {
-            browser: { name: '前端听写' },
-            cloud: { name: '云端听写', url: '', token: '' },
-            bluetooth: { name: '蓝牙识别', device: '' },
-            camera: { name: '拍照识别' }
+            dictate: { name: '听写' },
+            camera: { name: '拍照' }
         }
     },
     extraction: {
-        current: localStorage.getItem('extractionCurrent') || 'regex',
         regex: {
             high: JSON.parse(localStorage.getItem('regexHigh')) || ['高压', '收缩压'],
             low: JSON.parse(localStorage.getItem('regexLow')) || ['低压', '舒张压'],
             pulse: JSON.parse(localStorage.getItem('regexPulse')) || ['心率', '脉率', '脉搏', '心跳']
-        },
-        model: {
-            url: localStorage.getItem('modelUrl') || '',
-            token: localStorage.getItem('modelToken') || '',
-            prompt: localStorage.getItem('modelPrompt') || ''
         }
     },
     record: {
         format: localStorage.getItem('recordFormat') || 'HH:MM---high/low(diff)-pulse🩺'
-    }
+    },
+    cameraModels: JSON.parse(localStorage.getItem('cameraModels')) || []
 };
 
-// 更新当前方式显示
 function updateCurrentMethod() {
     const method = config.recognition.methods[config.recognition.current];
     document.getElementById('currentMethod').textContent = method.name;
 }
 
-// 保存识别配置
 function saveRecognitionConfig() {
     const selected = document.querySelector('input[name="recognitionMethod"]:checked').value;
     config.recognition.current = selected;
@@ -324,49 +335,233 @@ function saveRecognitionConfig() {
     updateCurrentMethod();
 }
 
-// 切换提取配置显示
-function toggleExtractionConfig() {
-    const method = document.querySelector('input[name="extractionMethod"]:checked').value;
-    document.getElementById('regexConfig').style.display = method === 'regex' ? 'block' : 'none';
-    document.getElementById('modelConfig').style.display = method === 'model' ? 'block' : 'none';
-}
-
-// 初始化提取配置
 function initExtractionConfig() {
     document.getElementById('regexHigh').value = config.extraction.regex.high.join('|');
     document.getElementById('regexLow').value = config.extraction.regex.low.join('|');
     document.getElementById('regexPulse').value = config.extraction.regex.pulse.join('|');
-    document.getElementById('modelUrl').value = config.extraction.model.url;
-    document.getElementById('modelToken').value = config.extraction.model.token;
-    document.getElementById('modelPrompt').value = config.extraction.model.prompt;
 }
 
-// 保存提取配置
 function saveExtractionConfig() {
-    const method = document.querySelector('input[name="extractionMethod"]:checked').value;
-    config.extraction.current = method;
-    localStorage.setItem('extractionCurrent', method);
-    
     config.extraction.regex.high = document.getElementById('regexHigh').value.split('|');
     config.extraction.regex.low = document.getElementById('regexLow').value.split('|');
     config.extraction.regex.pulse = document.getElementById('regexPulse').value.split('|');
     localStorage.setItem('regexHigh', JSON.stringify(config.extraction.regex.high));
     localStorage.setItem('regexLow', JSON.stringify(config.extraction.regex.low));
     localStorage.setItem('regexPulse', JSON.stringify(config.extraction.regex.pulse));
-    
-    config.extraction.model.url = document.getElementById('modelUrl').value;
-    config.extraction.model.token = document.getElementById('modelToken').value;
-    config.extraction.model.prompt = document.getElementById('modelPrompt').value;
-    localStorage.setItem('modelUrl', config.extraction.model.url);
-    localStorage.setItem('modelToken', config.extraction.model.token);
-    localStorage.setItem('modelPrompt', config.extraction.model.prompt);
 }
 
-// 保存记录配置
 function saveRecordConfig() {
     config.record.format = document.getElementById('recordFormat').value;
     localStorage.setItem('recordFormat', config.record.format);
     renderRecords();
+}
+
+function renderModelList() {
+    const container = document.getElementById('modelList');
+    if (config.cameraModels.length === 0) {
+        container.innerHTML = '<div style="color:#999; font-size:13px;">暂无型号配置</div>';
+        return;
+    }
+    container.innerHTML = config.cameraModels.map((m, i) => `
+        <div style="display:flex; justify-content:space-between; align-items:center; padding:6px 0; border-bottom:1px solid #eee;">
+            <span style="font-size:14px;">${m.name}: ${m.order.join('/')}</span>
+            <button class="btn btn-small" style="background:#e74c3c; color:white; padding:2px 8px;" onclick="deleteModel(${i})">删除</button>
+        </div>
+    `).join('');
+}
+
+function deleteModel(index) {
+    config.cameraModels.splice(index, 1);
+    localStorage.setItem('cameraModels', JSON.stringify(config.cameraModels));
+    renderModelList();
+}
+
+let ocrNumbers = [];
+let ocrMapping = [null, null, null];
+
+function openModelConfig() {
+    ocrNumbers = [];
+    ocrMapping = [null, null, null];
+    document.getElementById('ocrPreview').innerHTML = '<div style="color:#999; font-size:14px;">请先拍照识别数字</div>';
+    document.getElementById('modelNameInput').value = '';
+    document.getElementById('modelConfigModal').style.display = 'block';
+    
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = 'image/*';
+    input.capture = 'environment';
+    input.onchange = function(e) {
+        handleModelConfigImage(e);
+    };
+    input.click();
+}
+
+function closeModelConfig() {
+    document.getElementById('modelConfigModal').style.display = 'none';
+}
+
+async function handleModelConfigImage(event) {
+    const file = event.target.files[0];
+    if (!file) return;
+    
+    document.getElementById('ocrPreview').innerHTML = '<div style="color:#666;">识别中...</div>';
+    
+    const img = new Image();
+    img.onload = async function() {
+        const canvas = document.createElement('canvas');
+        const ctx = canvas.getContext('2d');
+        canvas.width = img.width;
+        canvas.height = img.height;
+        ctx.drawImage(img, 0, 0);
+        const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+        
+        try {
+            const result = await Tesseract.recognize(imageData, 'eng', {
+                tessedit_char_whitelist: '0123456789'
+            });
+            const numbers = result.data.text.match(/\d{2,3}/g) || [];
+            ocrNumbers = numbers.slice(0, 3);
+            ocrMapping = [null, null, null];
+            renderOcrPreview();
+        } catch (e) {
+            document.getElementById('ocrPreview').innerHTML = '<div style="color:#e74c3c;">识别失败: ' + e.message + '</div>';
+        }
+    };
+    img.src = URL.createObjectURL(file);
+}
+
+function renderOcrPreview() {
+    const labels = ['高压', '低压', '心率'];
+    const container = document.getElementById('ocrPreview');
+    if (ocrNumbers.length === 0) {
+        container.innerHTML = '<div style="color:#999;">未识别到数字</div>';
+        return;
+    }
+    container.innerHTML = '<div style="margin-bottom:8px; color:#666; font-size:13px;">长按数字选择属性</div>' +
+        ocrNumbers.map((num, i) => {
+            const assigned = ocrMapping[i];
+            const label = assigned !== null ? labels[assigned] : '未分配';
+            const color = assigned !== null ? '#27ae60' : '#999';
+            return `<span class="ocr-num" data-index="${i}" style="display:inline-block; padding:8px 12px; margin:4px; background:#f0f0f0; border-radius:6px; cursor:pointer; font-size:18px; font-weight:bold;" onclick="showOcrMenu(${i})">${num}<br><small style="color:${color}; font-size:12px;">${label}</small></span>`;
+        }).join('');
+}
+
+function showOcrMenu(index) {
+    const labels = ['高压', '低压', '心率'];
+    const usedLabels = ocrMapping.filter(m => m !== null);
+    const availableLabels = labels.filter((_, i) => !usedLabels.includes(i));
+    
+    if (availableLabels.length === 0) return;
+    
+    const menu = document.createElement('div');
+    menu.style.cssText = 'position:fixed; background:white; border-radius:8px; box-shadow:0 2px 10px rgba(0,0,0,0.2); padding:8px 0; z-index:1001;';
+    menu.innerHTML = availableLabels.map(label => {
+        const labelIndex = labels.indexOf(label);
+        return `<div style="padding:8px 16px; cursor:pointer;" onmouseover="this.style.background='#f0f0f0'" onmouseout="this.style.background='white'" onclick="assignOcr(${index}, ${labelIndex})">${label}</div>`;
+    }).join('');
+    
+    const rect = event.target.getBoundingClientRect();
+    menu.style.top = rect.bottom + 'px';
+    menu.style.left = rect.left + 'px';
+    document.body.appendChild(menu);
+    
+    setTimeout(() => {
+        document.addEventListener('click', function closeMenu() {
+            menu.remove();
+            document.removeEventListener('click', closeMenu);
+        });
+    }, 10);
+}
+
+function assignOcr(numIndex, labelIndex) {
+    const existingIndex = ocrMapping.indexOf(labelIndex);
+    if (existingIndex !== -1) {
+        ocrMapping[existingIndex] = null;
+    }
+    ocrMapping[numIndex] = labelIndex;
+    renderOcrPreview();
+}
+
+function saveModelConfig() {
+    const name = document.getElementById('modelNameInput').value.trim();
+    if (!name) {
+        alert('请输入型号名称');
+        return;
+    }
+    if (ocrMapping.some(m => m === null)) {
+        alert('请为所有数字分配属性');
+        return;
+    }
+    
+    const order = [];
+    for (let i = 0; i < 3; i++) {
+        const numIndex = ocrMapping.indexOf(i);
+        if (numIndex !== -1) order.push(ocrNumbers[numIndex]);
+    }
+    
+    config.cameraModels.push({ name, order: ['高压', '低压', '心率'] });
+    localStorage.setItem('cameraModels', JSON.stringify(config.cameraModels));
+    renderModelList();
+    closeModelConfig();
+}
+
+function openCameraModal() {
+    if (config.cameraModels.length === 0) {
+        alert('请先配置型号');
+        return;
+    }
+    
+    const selector = document.getElementById('modelSelector');
+    selector.innerHTML = '<select id="selectedModel" style="width:100%; padding:8px; border:1px solid #ddd; border-radius:4px;">' +
+        config.cameraModels.map((m, i) => `<option value="${i}">${m.name}</option>`).join('') +
+        '</select>';
+    
+    document.getElementById('cameraStatus').textContent = '';
+    document.getElementById('cameraModal').style.display = 'block';
+}
+
+function closeCameraModal() {
+    document.getElementById('cameraModal').style.display = 'none';
+}
+
+async function handleImageUpload(event) {
+    const file = event.target.files[0];
+    if (!file) return;
+    
+    document.getElementById('cameraStatus').textContent = '识别中...';
+    
+    const img = new Image();
+    img.onload = async function() {
+        const canvas = document.createElement('canvas');
+        const ctx = canvas.getContext('2d');
+        canvas.width = img.width;
+        canvas.height = img.height;
+        ctx.drawImage(img, 0, 0);
+        const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+        
+        try {
+            const result = await Tesseract.recognize(imageData, 'eng', {
+                tessedit_char_whitelist: '0123456789'
+            });
+            const numbers = result.data.text.match(/\d{2,3}/g) || [];
+            
+            if (numbers.length < 3) {
+                document.getElementById('cameraStatus').textContent = '识别到的数字不足3个';
+                return;
+            }
+            
+            const modelIndex = document.getElementById('selectedModel').value;
+            const model = config.cameraModels[modelIndex];
+            
+            resultText.value = numbers.slice(0, 3).join(' ');
+            document.getElementById('cameraStatus').textContent = '识别完成: ' + numbers.slice(0, 3).join(' / ');
+            closeCameraModal();
+            checkAndShowExtracted();
+        } catch (e) {
+            document.getElementById('cameraStatus').textContent = '识别失败: ' + e.message;
+        }
+    };
+    img.src = URL.createObjectURL(file);
 }
 
 // 长按检测 - 使用统一的处理方式
@@ -442,6 +637,7 @@ document.addEventListener('DOMContentLoaded', function() {
     setupLongPress('recordBtn', 'recordConfig', function() {
         document.getElementById('recordFormat').value = config.record.format;
     });
+    renderModelList();
 });
 
 // 初始化
@@ -504,8 +700,12 @@ if (!SpeechRecognition) {
             ignoreNextClick['dictateBtn'] = false;
             return;
         }
-        if (isListening) stopListening();
-        else startListening();
+        if (config.recognition.current === 'camera') {
+            openCameraModal();
+        } else {
+            if (isListening) stopListening();
+            else startListening();
+        }
     };
     
     recognition.onresult = function(event) {
