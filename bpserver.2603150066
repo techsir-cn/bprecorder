@@ -19,9 +19,8 @@ from datetime import datetime
 from http.server import HTTPServer, SimpleHTTPRequestHandler
 from pathlib import Path
 
-BAILIAN_API_KEY = "sk-626b3d75ad084280ac2cfb8c1d7753b4"
-BAILIAN_BASE_URL = "https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions"
-BAILIAN_MODEL = "qwen3-vl-235b-a22b-thinking"
+QWEN_API_KEY = "sk-sp-999015d63f1347489b8e9c3fe9d62f40"
+QWEN_BASE_URL = "https://coding.dashscope.aliyuncs.com/apps/anthropic/v1/messages"
 
 WORKSPACE = Path(__file__).parent.resolve()
 RECORDS_DIR = WORKSPACE / "records"
@@ -149,7 +148,7 @@ def extract_bp_data(text):
 
 
 def ocr_image(image_data):
-    """使用百炼VL模型识别图片"""
+    """使用qwen3.5-plus识别图片"""
     try:
         from PIL import Image
         import io
@@ -198,27 +197,43 @@ def ocr_image(image_data):
         img_data = base64.b64encode(buffer.getvalue()).decode()
         
         data = {
-            "model": BAILIAN_MODEL,
+            "model": "qwen3.5-plus",
+            "max_tokens": 256,
             "messages": [{
                 "role": "user",
                 "content": [
-                    {"type": "image_url", "image_url": {"url": f"data:image/png;base64,{img_data}"}},
-                    {"type": "text", "text": "请识别图片中血压计屏幕上的数字，只返回三个数字：高压 低压 脉率，格式如：高压104 低压73 脉率72"}
+                    {
+                        "type": "image",
+                        "source": {
+                            "type": "base64",
+                            "media_type": "image/png",
+                            "data": img_data
+                        }
+                    },
+                    {
+                        "type": "text",
+                        "text": "请识别图片中血压计屏幕上的数字，只返回三个数字：高压 低压 脉率，格式如：高压104 低压73 脉率72。如果看不清就说识别失败。"
+                    }
                 ]
             }]
         }
         
-        req = urllib.request.Request(BAILIAN_BASE_URL, data=json.dumps(data).encode())
+        req = urllib.request.Request(QWEN_BASE_URL, data=json.dumps(data).encode())
         req.add_header("Content-Type", "application/json")
-        req.add_header("Authorization", f"Bearer {BAILIAN_API_KEY}")
+        req.add_header("x-api-key", QWEN_API_KEY)
+        req.add_header("anthropic-version", "2023-06-01")
         
-        with urllib.request.urlopen(req, timeout=120) as response:
+        with urllib.request.urlopen(req, timeout=60) as response:
             result = json.loads(response.read().decode())
         
-        if "choices" not in result:
+        if "content" not in result:
             return {"success": False, "error": "API返回格式错误"}
         
-        text_content = result["choices"][0]["message"]["content"]
+        text_content = ""
+        for item in result.get("content", []):
+            if item.get("type") == "text":
+                text_content = item.get("text", "")
+                break
         
         if not text_content:
             return {"success": False, "error": "未识别到内容"}
